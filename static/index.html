@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bakehouse | Enterprise Intelligence</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <style>
+        :root {
+            --slate-900: #1E293B;
+            --slate-800: #1E3A5F;
+            --slate-700: #334155;
+            --slate-600: #475569;
+            --gold: #D97706;
+            --gold-light: #F59E0B;
+            --gold-subtle: rgba(217, 119, 6, 0.08);
+            --teal: #0F766E;
+            --teal-light: #14B8A6;
+            --gray-50: #F8FAFC;
+            --gray-100: #F1F5F9;
+            --gray-200: #E2E8F0;
+            --gray-300: #CBD5E1;
+            --white: #FFFFFF;
+            --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            --radius: 12px;
+            --radius-lg: 16px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--gray-50);
+            color: var(--slate-900);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* NAVIGATION BAR */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: var(--slate-900);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 0 2rem;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .navbar-brand .logo-mark {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+            color: var(--white);
+        }
+
+        .navbar-brand h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--white);
+            letter-spacing: -0.3px;
+        }
+
+        .navbar-brand span {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--gray-300);
+            font-weight: 500;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 4px;
+        }
+
+        .nav-link {
+            padding: 8px 18px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            color: var(--gray-300);
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            color: var(--white);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .nav-link.active {
+            color: var(--gold);
+            background: var(--gold-subtle);
+            border-color: rgba(217, 119, 6, 0.2);
+        }
+
+        /* PAGE SYSTEM */
+        .page {
+            display: none;
+            padding-top: 64px;
+            min-height: 100vh;
+            animation: fadeIn 0.4s ease;
+        }
+
+        .page.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
+        }
+
+        /* PAGE 1: LANDING */
+        .hero {
+            min-height: calc(100vh - 64px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(160deg, var(--slate-900) 0%, #0F172A 50%, var(--slate-700) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -30%;
+            width: 80%;
+            height: 200%;
+            background: radial-gradient(ellipse, rgba(217, 119, 6, 0.04) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            bottom: -20%;
+            left: -20%;
+            width: 60%;
+            height: 120%;
+            background: radial-gradient(ellipse, rgba(15, 118, 110, 0.03) 0%, transparent 60%);
+            pointer-events: none;
+        }
+
+        .hero-content {
+            text-align: center;
+            max-width: 900px;
+            padding: 3rem 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(217, 119, 6, 0.1);
+            border: 1px solid rgba(217, 119, 6, 0.25);
+            border-radius: 100px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--gold-light);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            margin-bottom: 2rem;
+        }
+
+        .hero-badge::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            background: var(--gold);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.4;
+            }
+        }
+
+        .hero h2 {
+            font-size: clamp(2.5rem, 5vw, 3.8rem);
+            font-weight: 800;
+            color: var(--white);
+            line-height: 1.1;
+            letter-spacing: -1.5px;
+            margin-bottom: 1.5rem;
+        }
+
+        .hero h2 .highlight {
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: 1.1rem;
+            color: var(--gray-300);
+            max-width: 680px;
+            margin: 0 auto 3rem;
+            line-height: 1.8;
+            font-weight: 300;
+        }
+
+        .hero-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1.2rem;
+            margin-top: 3rem;
+            max-width: 750px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .hero-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            text-align: left;
+            transition: var(--transition);
+        }
+
+        .hero-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(217, 119, 6, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .hero-card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            font-weight: 700;
+        }
+
+        .hero-card-icon.gold {
+            background: rgba(217, 119, 6, 0.15);
+            color: var(--gold-light);
+        }
+
+        .hero-card-icon.teal {
+            background: rgba(15, 118, 110, 0.15);
+            color: var(--teal-light);
+        }
+
+        .hero-card-icon.white {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--white);
+        }
+
+        .hero-card h4 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--white);
+            margin-bottom: 0.4rem;
+        }
+
+        .hero-card p {
+            font-size: 0.75rem;
+            color: var(--gray-300);
+            line-height: 1.5;
+        }
+
+        .hero-cta {
+            margin-top: 3rem;
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 28px;
+            border-radius: 10px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition);
+            border: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--gold), var(--gold-light));
+            color: var(--white);
+            box-shadow: 0 4px 14px rgba(217, 119, 6, 0.3);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(217, 119, 6, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.06);
+            color: var(--white);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.25);
+        }
+
+        /* PAGE 2: DASHBOARD + GENIE */
+        .dashboard-page {
+            background: var(--gray-50);
+            padding-top: 64px;
+        }
+
+        .dashboard-header {
+            padding: 1.5rem 2rem;
+            background: var(--white);
+            border-bottom: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .dashboard-header h3 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--slate-900);
+        }
+
+        .dashboard-header p {
+            font-size: 0.78rem;
+            color: var(--slate-600);
+            margin-top: 2px;
+        }
+
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.72rem;
+            font-weight: 500;
+            color: var(--teal);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+        }
+
+        .live-indicator::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background: var(--teal);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .dashboard-container {
+            width: 100%;
+            height: calc(100vh - 64px - 72px);
+            position: relative;
+        }
+
+        .dashboard-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: var(--white);
+            display: block;
+        }
+
+        /* Genie Floating Widget */
+        .genie-fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            z-index: 1095;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: var(--slate-900);
+            border: 2px solid var(--gold);
+            color: var(--gold);
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 8px 32px rgba(30, 41, 59, 0.4);
+            transition: var(--transition);
+        }
+
+        .genie-fab:hover {
+            transform: scale(1.08);
+            box-shadow: 0 12px 40px rgba(217, 119, 6, 0.3);
+        }
+
+        .genie-fab.hidden {
+            display: none;
+        }
+
+        .genie-modal {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1100;
+            width: min(480px, calc(100vw - 32px));
+            height: min(78vh, 680px);
+            max-height: calc(100vh - 80px);
+            background: var(--white);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-xl);
+            border: 1px solid var(--gray-200);
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .genie-modal.open {
+            display: flex;
+            animation: slideUp 0.3s ease;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(16px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .genie-modal-header {
+            background: var(--slate-900);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--gold);
+            flex-shrink: 0;
+        }
+
+        .genie-modal-header h4 {
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--white);
+        }
+
+        .genie-modal-header span {
+            font-size: 0.65rem;
+            color: var(--gray-300);
+        }
+
+        .genie-close {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border: none;
+            color: var(--gray-300);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .genie-close:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: var(--white);
+        }
+
+        .genie-modal-body {
+            flex: 1;
+            min-height: 0;
+            position: relative;
+            overflow: hidden;
+            background: #fff;
+            color-scheme: light;
+        }
+
+        .genie-modal-body iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: #fff;
+            pointer-events: auto;
+        }
+
+        .genie-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 1050;
+            background: rgba(15, 23, 42, 0.12);
+            border: none;
+            cursor: pointer;
+            display: none;
+        }
+
+        .genie-backdrop.open {
+            display: block;
+        }
+
+        /* PAGE 3: STORYTELLING */
+        .story-page {
+            background: var(--white);
+            padding-top: 64px;
+        }
+
+        .story-hero {
+            background: linear-gradient(160deg, var(--slate-900) 0%, #0F172A 100%);
+            padding: 5rem 2rem 4rem;
+            text-align: center;
+        }
+
+        .story-hero h2 {
+            font-size: clamp(2rem, 4vw, 2.8rem);
+            font-weight: 800;
+            color: var(--white);
+            letter-spacing: -1px;
+            margin-bottom: 1rem;
+        }
+
+        .story-hero p {
+            font-size: 1rem;
+            color: var(--gray-300);
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        .story-content {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 4rem 2rem;
+        }
+
+        .story-section {
+            margin-bottom: 4rem;
+        }
+
+        .story-section-label {
+            font-size: 0.68rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--gold);
+            margin-bottom: 0.8rem;
+        }
+
+        .story-section h3 {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--slate-900);
+            letter-spacing: -0.5px;
+            margin-bottom: 1rem;
+            line-height: 1.3;
+        }
+
+        .story-section p {
+            font-size: 0.95rem;
+            color: var(--slate-600);
+            line-height: 1.9;
+            margin-bottom: 1rem;
+        }
+
+        .story-widget {
+            margin: 2.5rem 0;
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            border: 1px solid var(--gray-200);
+            box-shadow: var(--shadow-md);
+            background: var(--gray-50);
+        }
+
+        .story-widget iframe {
+            width: 100%;
+            height: 420px;
+            border: none;
+            display: block;
+        }
+
+        .story-widget-caption {
+            padding: 12px 18px;
+            background: var(--gray-50);
+            border-top: 1px solid var(--gray-200);
+            font-size: 0.72rem;
+            color: var(--slate-600);
+            font-weight: 500;
+        }
+
+        .story-divider {
+            width: 60px;
+            height: 3px;
+            background: linear-gradient(90deg, var(--gold), var(--teal));
+            border-radius: 4px;
+            margin: 3rem 0;
+        }
+
+        .story-callout {
+            background: var(--gold-subtle);
+            border-left: 3px solid var(--gold);
+            border-radius: 0 var(--radius) var(--radius) 0;
+            padding: 1.2rem 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .story-callout p {
+            font-size: 0.88rem;
+            color: var(--slate-700);
+            font-weight: 500;
+            line-height: 1.7;
+            margin: 0;
+        }
+
+        .genie-fullscreen-section {
+            margin-top: 4rem;
+            padding: 3rem;
+            background: linear-gradient(160deg, var(--slate-900), #0F172A);
+            border-radius: var(--radius-lg);
+            text-align: center;
+        }
+
+        .genie-fullscreen-section h3 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            color: var(--white);
+            margin-bottom: 0.8rem;
+        }
+
+        .genie-fullscreen-section p {
+            font-size: 0.88rem;
+            color: var(--gray-300);
+            margin-bottom: 2rem;
+            max-width: 500px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .genie-fullscreen-container {
+            display: none;
+            margin-top: 2rem;
+            border-radius: var(--radius);
+            overflow: hidden;
+            border: 2px solid var(--gold);
+            background: #fff;
+            color-scheme: light;
+        }
+
+        .genie-fullscreen-container.open {
+            display: block;
+            animation: fadeIn 0.4s ease;
+            min-height: min(75vh, 720px);
+        }
+
+        .genie-fullscreen-container iframe {
+            width: 100%;
+            height: min(75vh, 720px);
+            min-height: 560px;
+            border: none;
+            display: block;
+            background: #fff;
+        }
+
+        /* RESPONSIVE */
+        @media (max-width: 768px) {
+                .navbar {
+                        padding: 0 1rem;
+                }
+
+                .nav-links {
+                        gap: 2px;
+                }
+
+                .nav-link {
+                        padding: 6px 10px;
+                        font-size: 0.72rem;
+                }
+
+                .hero-cards {
+                        grid-template-columns: 1fr;
+                }
+
+                .genie-modal {
+                    width: calc(100vw - 32px);
+                    right: 16px;
+                    bottom: 16px;
+                    height: min(82vh, 680px);
+                }
+
+                .story-content {
+                    padding: 2rem 1rem;
+                }
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--gray-100);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-300);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--slate-600);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <div class="logo-mark">B</div>
+            <div>
+                <h1>Bakehouse Intelligence</h1>
+                <span>Enterprise Analytics Platform</span>
+            </div>
+        </div>
+        <div class="nav-links">
+            <a class="nav-link active" onclick="navigateTo('landing', this)">Inicio</a>
+            <a class="nav-link" onclick="navigateTo('dashboard', this)">Panel Analitico</a>
+            <a class="nav-link" onclick="navigateTo('storytelling', this)">Reporte Narrativo</a>
+        </div>
+    </nav>
+
+    <!-- PAGE 1: LANDING -->
+    <section id="page-landing" class="page active">
+        <div class="hero">
+            <div class="hero-content">
+                <div class="hero-badge">Plataforma Activa</div>
+                <h2>De la Masa al<br><span class="highlight">Margen de Ganancia</span></h2>
+                <p class="hero-subtitle">
+                    Plataforma de inteligencia empresarial unificada que integra una capa semantica
+                    certificada (UC Metric Views), visualizacion analitica avanzada e inteligencia
+                    conversacional para la toma de decisiones estrategicas en el ecosistema
+                    de franquicias Bakehouse.
+                </p>
+
+                <div class="hero-cards">
+                    <div class="hero-card">
+                        <div class="hero-card-icon gold">S</div>
+                        <h4>Capa Semantica Unificada</h4>
+                        <p>Metricas certificadas mediante Unity Catalog Metric Views con gobernanza centralizada y
+                            linaje completo.</p>
+                    </div>
+                    <div class="hero-card">
+                        <div class="hero-card-icon teal">D</div>
+                        <h4>Dashboard Interactivo</h4>
+                        <p>Visualizacion ejecutiva con KPIs de velocidad, distribucion geografica y rendimiento por
+                            segmento.</p>
+                    </div>
+                    <div class="hero-card">
+                        <div class="hero-card-icon white">AI</div>
+                        <h4>Asistente Conversacional</h4>
+                        <p>Genie Space para consultas en lenguaje natural sobre la capa semantica en tiempo real.</p>
+                    </div>
+                </div>
+
+                <div class="hero-cta">
+                    <button class="btn btn-primary"
+                        onclick="navigateTo('dashboard', document.querySelectorAll('.nav-link')[1])">Acceder al Panel
+                        Analitico</button>
+                    <button class="btn btn-secondary"
+                        onclick="navigateTo('storytelling', document.querySelectorAll('.nav-link')[2])">Explorar Reporte
+                        Narrativo</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- PAGE 2: DASHBOARD + GENIE CHATBOT -->
+    <section id="page-dashboard" class="page">
+        <div class="dashboard-page">
+            <div class="dashboard-header">
+                <div>
+                    <h3>Panel Analitico Integrado</h3>
+                    <p>Dashboard ejecutivo: Bakehouse - De la Masa al Margen de Ganancia</p>
+                </div>
+                <div class="live-indicator">Conectado a UC Metric Views</div>
+            </div>
+            <div class="dashboard-container">
+                <iframe
+                    src="https://fevm-classic-stable-rue1fz.cloud.databricks.com/embed/dashboardsv3/01f155b74e82153fa9eabc5f08f2d7bf?o=7474653353535007&fullscreenWidget=23c99318"
+                    title="Bakehouse Enterprise Dashboard"
+                    width="100%"
+                    height="100%"
+                    frameBorder="0"
+                    allow="fullscreen"
+                ></iframe>
+            </div>
+        </div>
+    </section>
+
+    <!-- Genie Floating Widget (outside page sections, like ny-taxi-embed-app) -->
+    <button class="genie-fab hidden" id="genie-fab" onclick="toggleGenie()"
+        title="Abrir Asistente Conversacional">AI</button>
+
+    <div class="genie-modal" id="genie-modal" role="dialog" aria-modal="true" aria-label="Genie">
+        <div class="genie-modal-header">
+            <div>
+                <h4>Bakehouse Intelligence Assistant</h4>
+                <span>Genie Space | Consultas en lenguaje natural</span>
+            </div>
+            <button class="genie-close" onclick="toggleGenie()">X</button>
+        </div>
+        <div class="genie-modal-body">
+            <iframe
+                id="genie-modal-iframe"
+                data-src="https://fevm-classic-stable-rue1fz.cloud.databricks.com/embed/genie/rooms/01f155c610fe10c8a11a33cfd06b1883?o=7474653353535007"
+                title="Genie Conversational Space"
+                width="100%"
+                height="100%"
+                frameBorder="0"
+                allow="clipboard-write"
+            ></iframe>
+        </div>
+    </div>
+
+    <button class="genie-backdrop" id="genie-backdrop" onclick="toggleGenie()" aria-label="Cerrar asistente"></button>
+
+    <!-- PAGE 3: DATA STORYTELLING -->
+    <section id="page-storytelling" class="page">
+        <div class="story-page">
+            <div class="story-hero">
+                <h2>De la Masa al Margen de Ganancia</h2>
+                <p>Narrativa analitica que descompone el rendimiento operativo y financiero de la franquicia Bakehouse a
+                    traves de sus dimensiones clave.</p>
+            </div>
+
+            <div class="story-content">
+                <!-- Section 1: Geographic -->
+                <div class="story-section">
+                    <div class="story-section-label">Capitulo I</div>
+                    <h3>Huella Geografica y Distribucion de Ingresos</h3>
+                    <p>La operacion de Bakehouse se extiende a traves de multiples continentes, con una presencia
+                        significativa en mercados de alta densidad poblacional. La distribucion espacial de las
+                        franquicias revela patrones de concentracion que correlacionan directamente con los volumenes de
+                        transaccion observados.</p>
+                    <p>El mapa a continuacion representa cada punto de venta con intensidad proporcional al ingreso
+                        acumulado, permitiendo identificar focos de alto rendimiento y posibles zonas de expansion
+                        estrategica.</p>
+                </div>
+
+                <div class="story-widget">
+                    <iframe
+                        src="https://fevm-classic-stable-rue1fz.cloud.databricks.com/embed/dashboardsv3/01f155b74e82153fa9eabc5f08f2d7bf?o=7474653353535007&fullscreenWidget=23c99318~map_ingresos"
+                        title="Mapa Geografico de Ingresos"
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                    ></iframe>
+                    <div class="story-widget-caption">Fuente: UC Metric View mv_bakehouse_sales | Coordenadas
+                        geoespaciales de franquicias activas</div>
+                </div>
+
+                <div class="story-divider"></div>
+
+                <!-- Section 2: Temporal -->
+                <div class="story-section">
+                    <div class="story-section-label">Capitulo II</div>
+                    <h3>Dinamica Temporal y Velocidad del Negocio</h3>
+                    <p>El analisis de tendencias temporales constituye el pulso operativo de la franquicia. Utilizando
+                        metricas de promedio rodante a 30 dias superpuestas con la granularidad diaria, es posible
+                        distinguir entre fluctuaciones estacionales y cambios estructurales en la demanda.</p>
+                    <div class="story-callout">
+                        <p>El indicador Day-over-Day (DoD) opera como metrica principal de velocidad, revelando la tasa
+                            de aceleracion o desaceleracion del negocio en ventanas de 24 horas. Valores superiores al
+                            umbral del 5% senalan picos de demanda que requieren atencion operativa inmediata.</p>
+                    </div>
+                </div>
+
+                <div class="story-widget">
+                    <iframe
+                        src="https://fevm-classic-stable-rue1fz.cloud.databricks.com/embed/dashboardsv3/01f155b74e82153fa9eabc5f08f2d7bf?o=7474653353535007&fullscreenWidget=23c99318~area_tendencia"
+                        title="Tendencia Temporal de Ingresos"
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                    ></iframe>
+                    <div class="story-widget-caption">Metrica: Ingreso diario vs. Promedio rodante 30 dias | Periodo:
+                        Mayo 2024</div>
+                </div>
+
+                <div class="story-divider"></div>
+
+                <!-- Section 3: Segmentation -->
+                <div class="story-section">
+                    <div class="story-section-label">Capitulo III</div>
+                    <h3>Segmentacion por Formato y Rendimiento Comparativo</h3>
+                    <p>La diversidad de formatos de tienda (Small, Medium, Large) representa una estrategia deliberada
+                        de penetracion de mercado. Cada formato responde a condiciones locales distintas: densidad de
+                        trafico peatonal, costo de alquiler por metro cuadrado y perfil demografico del consumidor
+                        circundante.</p>
+                    <p>El benchmarking entre formatos, estratificado adicionalmente por continente, permite cuantificar
+                        el retorno marginal de cada metro cuadrado adicional y fundamentar decisiones de expansion con
+                        evidencia granular.</p>
+                </div>
+
+                <div class="story-widget">
+                    <iframe
+                        src="https://fevm-classic-stable-rue1fz.cloud.databricks.com/embed/dashboardsv3/01f155b74e82153fa9eabc5f08f2d7bf?o=7474653353535007&fullscreenWidget=23c99318~bar_store_size"
+                        title="Rendimiento por Formato de Tienda"
+                        width="100%"
+                        height="100%"
+                        frameBorder="0"
+                    ></iframe>
+                    <div class="story-widget-caption">Dimension: store_size x continent | Metrica: Ingreso total
+                        agregado</div>
+                </div>
+
+                <div class="story-divider"></div>
+
+                <!-- Section 4: AI Exploration -->
+                <div class="story-section">
+                    <div class="genie-fullscreen-section">
+                        <h3>Inmersion Conversacional Completa</h3>
+                        <p>Active el asistente de inteligencia artificial para explorar libremente la capa semantica
+                            mediante consultas en lenguaje natural.</p>
+                        <button class="btn btn-primary" onclick="toggleFullscreenGenie()">Iniciar Sesion de Analisis
+                            Conversacional</button>
+                        <div class="genie-fullscreen-container" id="genie-fullscreen">
+                            <iframe
+                                id="genie-fullscreen-iframe"
+                                data-src="https://fevm-classic-stable-rue1fz.cloud.databricks.com/embed/genie/rooms/01f155c610fe10c8a11a33cfd06b1883?o=7474653353535007"
+                                title="Genie Space Fullscreen"
+                                width="100%"
+                                height="100%"
+                                frameBorder="0"
+                                allow="clipboard-write"
+                            ></iframe>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- JAVASCRIPT: SPA Navigation -->
+    <script>
+        function loadGenieIframe(iframe) {
+            if (iframe && iframe.dataset.src) {
+                iframe.src = iframe.dataset.src;
+            }
+        }
+
+        function unloadGenieIframe(iframe) {
+            if (iframe) {
+                iframe.src = 'about:blank';
+            }
+        }
+
+        function closeGenieModal() {
+            var modal = document.getElementById('genie-modal');
+            var fab = document.getElementById('genie-fab');
+            var backdrop = document.getElementById('genie-backdrop');
+            var iframe = document.getElementById('genie-modal-iframe');
+            modal.classList.remove('open');
+            backdrop.classList.remove('open');
+            fab.classList.remove('hidden');
+            unloadGenieIframe(iframe);
+        }
+
+        function navigateTo(pageId, linkEl) {
+            document.querySelectorAll('.page').forEach(function (p) { p.classList.remove('active'); });
+            document.getElementById('page-' + pageId).classList.add('active');
+            document.querySelectorAll('.nav-link').forEach(function (l) { l.classList.remove('active'); });
+            if (linkEl) linkEl.classList.add('active');
+
+            var fab = document.getElementById('genie-fab');
+            if (pageId === 'dashboard') {
+                fab.classList.remove('hidden');
+            } else {
+                fab.classList.add('hidden');
+                closeGenieModal();
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        function toggleGenie() {
+            var modal = document.getElementById('genie-modal');
+            var fab = document.getElementById('genie-fab');
+            var backdrop = document.getElementById('genie-backdrop');
+            var iframe = document.getElementById('genie-modal-iframe');
+            var isOpen = modal.classList.contains('open');
+
+            if (isOpen) {
+                closeGenieModal();
+                return;
+            }
+
+            modal.classList.add('open');
+            backdrop.classList.add('open');
+            fab.classList.add('hidden');
+            loadGenieIframe(iframe);
+        }
+
+        function toggleFullscreenGenie() {
+            var container = document.getElementById('genie-fullscreen');
+            var iframe = document.getElementById('genie-fullscreen-iframe');
+            var isOpen = container.classList.toggle('open');
+
+            if (isOpen) {
+                loadGenieIframe(iframe);
+                container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } else {
+                unloadGenieIframe(iframe);
+            }
+        }
+    </script>
+
+</body>
+
+</html>
