@@ -375,7 +375,12 @@ button {
   box-shadow: 0 2px 16px rgba(15, 23, 42, 0.10);
 }
 
-.widget-container iframe {
+.widget-iframe-clip {
+  overflow: hidden;
+  border-radius: 12px;
+}
+
+.widget-iframe-clip iframe {
   width: 100%;
   border: none;
   display: block;
@@ -792,8 +797,4 @@ button {
     border-radius: 18px;
   }
 
-  .widget-node-header {
-    flex-direction: column;
-    align-items: flex-start;
-  }
 }
