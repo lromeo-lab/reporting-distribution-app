@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import htm from 'htm';
 import { Node, mergeAttributes } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
@@ -114,48 +114,67 @@ export function createSeedDocument(t) {
 function WidgetNodeView(props) {
   const { node, updateAttributes, deleteNode } = props;
   const { src, title, caption, height } = node.attrs;
+  const [resizing, setResizing] = useState(false);
+  const startYRef = useRef(0);
+  const startHRef = useRef(0);
 
   function onEdit() {
     const nextSrc = window.prompt('Widget embed URL', src || '');
-    if (!nextSrc) {
-      return;
-    }
-
-    const nextTitle = window.prompt('Widget title', title || 'Databricks widget');
-    const nextCaption = window.prompt('Widget caption', caption || '');
-    const nextHeight = window.prompt('Widget height in pixels', String(height || 420));
-
+    if (!nextSrc) return;
+    const nextTitle = window.prompt('Title (leave empty for none)', title || '');
+    const nextHeight = window.prompt('Height in px', String(height || 420));
     updateAttributes({
       src: nextSrc,
-      title: nextTitle || 'Databricks widget',
-      caption: nextCaption || '',
+      title: nextTitle || '',
       height: Number(nextHeight || 420),
     });
   }
 
+  const onResizeStart = useCallback(e => {
+    e.preventDefault();
+    e.stopPropagation();
+    startYRef.current = e.clientY;
+    startHRef.current = Number(height) || 420;
+    setResizing(true);
+
+    const onMove = me => {
+      const delta = me.clientY - startYRef.current;
+      const next = Math.max(180, Math.min(1200, startHRef.current + delta));
+      updateAttributes({ height: Math.round(next) });
+    };
+    const onUp = () => {
+      setResizing(false);
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }, [height, updateAttributes]);
+
   return html`
-    <${NodeViewWrapper} className="widget-node">
-      <div className="widget-node-header" contentEditable=${false}>
-        <div>
-          <strong>${title || 'Databricks widget'}</strong>
-          <span>Embed preserving the same format as the existing dashboard</span>
+    <${NodeViewWrapper} className="widget-wrap" data-resizing=${resizing || undefined}>
+      <div className="widget-container" contentEditable=${false}>
+        <div className="widget-toolbar">
+          ${title ? html`<span className="widget-toolbar-title">${title}</span>` : null}
+          <div className="widget-toolbar-actions">
+            <a href=${src} target="_blank" rel="noreferrer" title="Open in new tab">\u2197</a>
+            <button type="button" onClick=${onEdit} title="Edit">\u270E</button>
+            <button type="button" onClick=${deleteNode} title="Remove">\u2715</button>
+          </div>
         </div>
-        <div className="widget-node-actions">
-          <a href=${src} target="_blank" rel="noreferrer">Open</a>
-          <button type="button" onClick=${onEdit}>Edit</button>
-          <button type="button" onClick=${deleteNode}>Remove</button>
-        </div>
+        <iframe
+          src=${src}
+          title=${title || 'Widget'}
+          style=${{ height: (Number(height) || 420) + 'px' }}
+          frameBorder="0"
+          allow="fullscreen"
+        ></iframe>
+        <div
+          className="widget-resize-bar"
+          onMouseDown=${onResizeStart}
+          title="Drag to resize"
+        ><span>\u22EF</span></div>
       </div>
-      <iframe
-        src=${src}
-        title=${title || 'Databricks widget'}
-        style=${{ height: `${Number(height || 420)}px` }}
-        frameBorder="0"
-        allow="fullscreen"
-      ></iframe>
-      ${caption
-        ? html`<div className="widget-node-caption" contentEditable=${false}>${caption}</div>`
-        : null}
     <//>
   `;
 }
@@ -170,7 +189,7 @@ export const DatabricksWidget = Node.create({
   addAttributes() {
     return {
       src: { default: '' },
-      title: { default: 'Databricks widget' },
+      title: { default: '' },
       caption: { default: '' },
       height: { default: 420 },
     };
