@@ -244,33 +244,32 @@ function App() {
   // ── Render ──
   return html`
     <div className=${`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-      <header className="unified-bar">
-        <div className="bar-left">
-          <button className="bar-toggle" onClick=${() => setSidebarOpen(o => !o)} title="Toggle sidebar">
-            <svg width="18" height="18" viewBox="0 0 18 18"><line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-          </button>
-          <span className="bar-brand">AI/BI Report Studio</span>
-        </div>
-        <div className="bar-center">
-          <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} />
-        </div>
-        <div className="bar-right">
-          <select className="lang-select" value=${locale} onChange=${e => setLocale(e.target.value)}>
-            ${locales.map(l => html`<option key=${l} value=${l}>${l.toUpperCase()}</option>`)}
-          </select>
-          <span className=${statusClass}>${statusLabel}</span>
-          <button className="bar-save" onClick=${persist}>${t('save')}</button>
-        </div>
-      </header>
-
-      <div className="main-area">
-        <${Sidebar}
-          documents=${documents} activeDocId=${activeDocId}
-          onSelectDoc=${handleSelectDoc}
-          onNewDoc=${() => setModalMode('newdoc')}
-          onDeleteDoc=${handleRequestDelete}
-          collapsed=${!sidebarOpen}
-        />
+      <${Sidebar}
+        documents=${documents} activeDocId=${activeDocId}
+        onSelectDoc=${handleSelectDoc}
+        onNewDoc=${() => setModalMode('newdoc')}
+        onDeleteDoc=${handleRequestDelete}
+        collapsed=${!sidebarOpen}
+        onToggleCollapse=${() => setSidebarOpen(o => !o)}
+      />
+      <div className="content-column">
+        <header className="unified-bar">
+          <div className="bar-left">
+            <button className="bar-toggle" onClick=${() => setSidebarOpen(o => !o)} title="Toggle sidebar">
+              <svg width="18" height="18" viewBox="0 0 18 18"><line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            </button>
+          </div>
+          <div className="bar-center">
+            <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} />
+          </div>
+          <div className="bar-right">
+            <select className="lang-select" value=${locale} onChange=${e => setLocale(e.target.value)}>
+              ${locales.map(l => html`<option key=${l} value=${l}>${l.toUpperCase()}</option>`)}
+            </select>
+            <span className=${statusClass}>${statusLabel}</span>
+            <button className="bar-save" onClick=${persist}>${t('save')}</button>
+          </div>
+        </header>
         <section className="canvas-area">
           ${error ? html`<div className="error-banner">${error}</div>` : null}
           ${documentContent

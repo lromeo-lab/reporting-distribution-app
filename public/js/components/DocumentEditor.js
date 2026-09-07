@@ -3,6 +3,7 @@ import htm from 'htm';
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Underline from '@tiptap/extension-underline';
 import { DatabricksWidget } from './WidgetExtension.js';
 
 const html = htm.bind(React.createElement);
@@ -12,9 +13,10 @@ export function DocumentEditor({ initialContent, onEditorReady, onContentChange,
     extensions: [
       StarterKit.configure({
         heading: {
-          levels: [1, 2, 3],
+          levels: [1, 2, 3, 4],
         },
       }),
+      Underline,
       Placeholder.configure({
         placeholder: placeholderText || 'Start writing your report...',
       }),
