@@ -8,6 +8,7 @@ import { WidgetPicker } from './components/WidgetPicker.js';
 import { createSeedDocument } from './components/WidgetExtension.js';
 import { loadDocument, saveDocument, listDocuments, deleteDocument } from './utils/api.js';
 import { I18nProvider, useI18n } from './utils/i18n.js';
+import { exportToPDF } from './utils/export.js';
 
 const html = htm.bind(React.createElement);
 
@@ -222,6 +223,24 @@ function App() {
     } catch (e) { setError(e.message); }
   }, [activeDocId, refreshDocList]);
 
+
+  const handleExportPDF = useCallback(async () => {
+    const canvas = document.querySelector('.editor-canvas');
+    if (!canvas) { setError('Cannot find editor canvas for export'); return; }
+    // Get title from first heading or activeDocId
+    const firstH = canvas.querySelector('h1, h2, h3');
+    const docTitle = firstH?.textContent || activeDocId || 'report';
+    setStatus('saving');
+    try {
+      await exportToPDF(canvas, docTitle);
+      setStatus('saved');
+    } catch (e) {
+      console.error('PDF export error:', e);
+      setError('PDF export failed: ' + e.message);
+      setStatus('error');
+    }
+  }, [activeDocId]);
+
   // ── Widget insertion ──
   const insertWidget = useCallback(widget => {
     if (!editor) return;
@@ -255,7 +274,7 @@ function App() {
       <div className="content-column">
         <header className="unified-bar">
           <div className="bar-center">
-            <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} />
+            <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} onExportPDF=${handleExportPDF} />
           </div>
           <div className="bar-right">
             <select className="lang-select" value=${locale} onChange=${e => setLocale(e.target.value)}>

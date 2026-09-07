@@ -426,6 +426,48 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
 }
 .editor-canvas .ProseMirror a:hover { color: #0d9488; }
 
+
+/* ── Export Dropdown ── */
+.tb-dd-menu-right {
+  right: 0; left: auto;
+  min-width: 220px;
+}
+
+.tb-export-item {
+  display: flex; align-items: center; gap: 12px;
+  width: 100%; text-align: left;
+  padding: 10px 12px; border: none; background: none;
+  border-radius: 8px; cursor: pointer;
+}
+.tb-export-item:hover { background: var(--gray-100); }
+.tb-export-item svg { flex-shrink: 0; color: var(--slate-500); }
+.tb-export-item.disabled { opacity: 0.4; cursor: default; }
+.tb-export-item.disabled:hover { background: none; }
+
+.tb-export-info { display: flex; flex-direction: column; }
+.tb-export-label { font-size: 0.84rem; font-weight: 600; color: var(--slate-800); }
+.tb-export-desc { font-size: 0.7rem; color: var(--slate-500); margin-top: 1px; }
+
+/* ── Print / Export CSS ── */
+@media print {
+  .sidebar, .unified-bar, .modal-backdrop { display: none !important; }
+  .app-shell { display: block !important; }
+  .content-column { display: block !important; }
+  .canvas-area {
+    padding: 0 !important; overflow: visible !important;
+    background: white !important;
+  }
+  .editor-canvas {
+    border: none !important; box-shadow: none !important;
+    border-radius: 0 !important; padding: 0 !important;
+    max-width: 100% !important;
+  }
+  .widget-toolbar, .widget-resize-bar { display: none !important; }
+  .editor-body { max-width: 100% !important; }
+  h1, h2, h3, h4 { page-break-after: avoid; }
+  blockquote, pre, .widget-wrap { page-break-inside: avoid; }
+}
+
 /* ── Responsive ── */
 @media (max-width: 900px) { :root { --sidebar-w: 220px; } }
 @media (max-width: 640px) {
