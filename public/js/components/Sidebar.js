@@ -3,12 +3,23 @@ import htm from 'htm';
 
 const html = htm.bind(React.createElement);
 
-export function Sidebar({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDoc, collapsed }) {
-  if (collapsed) return null;
+const I_COLLAPSE = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>`;
+const I_EXPAND  = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>`;
+
+export function Sidebar({ documents, activeDocId, onSelectDoc, onNewDoc, onDeleteDoc, collapsed, onToggleCollapse }) {
+  // Collapsed: show thin strip with expand button
+  if (collapsed) return html`
+    <aside className="sidebar sidebar-thin">
+      <button className="sidebar-expand" onClick=${onToggleCollapse} title="Open sidebar">${I_EXPAND}</button>
+    </aside>
+  `;
 
   return html`
     <aside className="sidebar">
-      <div className="sidebar-brand">AI/BI Report Studio</div>
+      <div className="sidebar-brand-row">
+        <span className="sidebar-brand">AI/BI Report Studio</span>
+        <button className="sidebar-collapse" onClick=${onToggleCollapse} title="Close sidebar">${I_COLLAPSE}</button>
+      </div>
       <div className="sidebar-header">
         <span className="sidebar-title">Reports</span>
         <button className="sidebar-new-btn" onClick=${onNewDoc} title="New report">+</button>

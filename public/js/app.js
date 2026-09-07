@@ -243,7 +243,7 @@ function App() {
 
   // ── Render ──
   return html`
-    <div className=${`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+    <div className="app-shell">
       <${Sidebar}
         documents=${documents} activeDocId=${activeDocId}
         onSelectDoc=${handleSelectDoc}
@@ -254,11 +254,6 @@ function App() {
       />
       <div className="content-column">
         <header className="unified-bar">
-          <div className="bar-left">
-            <button className="bar-toggle" onClick=${() => setSidebarOpen(o => !o)} title="Toggle sidebar">
-              <svg width="18" height="18" viewBox="0 0 18 18"><line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
-            </button>
-          </div>
           <div className="bar-center">
             <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} />
           </div>

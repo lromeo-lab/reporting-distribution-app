@@ -4,6 +4,7 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
 import { DatabricksWidget } from './WidgetExtension.js';
 
 const html = htm.bind(React.createElement);
@@ -17,6 +18,7 @@ export function DocumentEditor({ initialContent, onEditorReady, onContentChange,
         },
       }),
       Underline,
+      Link.configure({ openOnClick: false, HTMLAttributes: { target: '_blank' } }),
       Placeholder.configure({
         placeholder: placeholderText || 'Start writing your report...',
       }),

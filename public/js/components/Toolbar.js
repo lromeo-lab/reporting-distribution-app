@@ -11,16 +11,40 @@ const HEADING_OPTIONS = [
   { level: 0, label: 'Normal text', cls: 'dd-normal' },
 ];
 
-function Ico({ d, size }) {
-  const s = size || 18;
-  return html`<svg width=${s} height=${s} viewBox="0 0 ${s} ${s}" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d=${d} /></svg>`;
-}
+/* ── tiny SVG helpers — only path/line/circle, NO <text> (htm can't render it) ── */
+const I_UNDO = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 7h8a3.5 3.5 0 0 1 0 7H9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M7 4L4 7l3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>`;
+const I_REDO = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M14 7H6a3.5 3.5 0 0 0 0 7h3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/><path d="M11 4l3 3-3 3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>`;
 
-export function Toolbar({ editor, onOpenWidgetModal, onExport, onShare }) {
+// Blockquote — vertical bar + indent lines
+const I_QUOTE = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M4 4v10" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"/><path d="M8 6h7M8 9h5M8 12h6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>`;
+
+// Bullet list — dots + lines
+const I_UL = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="4" cy="5" r="1.4" fill="currentColor"/><line x1="8" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="4" cy="9" r="1.4" fill="currentColor"/><line x1="8" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><circle cx="4" cy="13" r="1.4" fill="currentColor"/><line x1="8" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>`;
+
+// Ordered list — short dashes (representing numbers) + lines
+const I_OL = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="2.5" y1="5" x2="5" y2="5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><line x1="8" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="2.5" y1="9" x2="5" y2="9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><line x1="8" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><line x1="2.5" y1="13" x2="5" y2="13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><line x1="8" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>`;
+
+// Link — chain links
+const I_LINK = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M7.5 10.5l3-3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M6 12l-1.2 1.2a2.1 2.1 0 0 1-3-3L4.5 7.5a2.1 2.1 0 0 1 3 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12 6l1.2-1.2a2.1 2.1 0 0 0-3-3L7.5 4.5a2.1 2.1 0 0 0 0 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>`;
+
+// Horizontal rule — line
+const I_HR = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>`;
+
+// Code block — brackets with inner lines (distinct from inline code)
+const I_CODEBLOCK = html`<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M5.5 4L2 9l3.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><path d="M12.5 4L16 9l-3.5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/><line x1="7" y1="9" x2="11" y2="9" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>`;
+
+// Widget plus
+const I_PLUS = html`<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>`;
+
+// Chevron down
+const I_CHEV = html`<svg width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round"/></svg>`;
+
+export function Toolbar({ editor, onOpenWidgetModal }) {
   const [headingOpen, setHeadingOpen] = useState(false);
   const ddRef = useRef(null);
-  const d = !editor;
+  const off = !editor; // disabled flag
 
+  // Close dropdown on outside click
   useEffect(() => {
     if (!headingOpen) return;
     const fn = e => { if (ddRef.current && !ddRef.current.contains(e.target)) setHeadingOpen(false); };
@@ -41,91 +65,79 @@ export function Toolbar({ editor, onOpenWidgetModal, onExport, onShare }) {
     setHeadingOpen(false);
   }, [editor]);
 
-  const btn = (cls, active, disabled, title, onClick, children) => html`
+  const insertLink = useCallback(() => {
+    if (!editor) return;
+    const prev = editor.getAttributes('link').href || '';
+    const url = window.prompt('URL', prev);
+    if (url === null) return; // cancelled
+    if (url === '') { editor.chain().focus().unsetLink().run(); return; }
+    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+  }, [editor]);
+
+  const tb = (cls, active, disabled, title, onClick, children) => html`
     <button type="button" className=${`tb ${cls} ${active ? 'on' : ''}`}
       disabled=${disabled} title=${title} onClick=${onClick}>${children}</button>`;
 
   return html`
     <div className="toolbar-row">
       <div className="toolbar-left">
-        <!-- Undo / Redo -->
-        ${btn('tb-icon', false, d || !editor?.can().undo(), 'Undo', () => editor.chain().focus().undo().run(),
-          html`<${Ico} d="M4 7h8a3.5 3.5 0 0 1 0 7H9" /><path d="M7 4L4 7l3 3" stroke="currentColor" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />`)}
-        ${btn('tb-icon', false, d || !editor?.can().redo(), 'Redo', () => editor.chain().focus().redo().run(),
-          html`<${Ico} d="M14 7H6a3.5 3.5 0 0 0 0 7h3" /><path d="M11 4l3 3-3 3" stroke="currentColor" fill="none" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />`)}
+        ${tb('tb-icon', false, off || !editor?.can().undo(), 'Undo', () => editor.chain().focus().undo().run(), I_UNDO)}
+        ${tb('tb-icon', false, off || !editor?.can().redo(), 'Redo', () => editor.chain().focus().redo().run(), I_REDO)}
 
         <div className="tb-div" />
-
-        <!-- Heading dropdown -->
         <div className="tb-dd" ref=${ddRef}>
-          <button type="button" className="tb-dd-trigger" disabled=${d}
+          <button type="button" className="tb-dd-trigger" disabled=${off}
             onClick=${() => setHeadingOpen(v => !v)}>
-            ${currentLabel}
-            <svg width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" /></svg>
+            ${currentLabel} ${I_CHEV}
           </button>
-          ${headingOpen ? html`
+          ${headingOpen && html`
             <div className="tb-dd-menu">
               ${HEADING_OPTIONS.map(o => html`
                 <button key=${o.level} type="button"
                   className=${`tb-dd-item ${o.level === currentLevel ? 'active' : ''}`}
                   onClick=${() => setHeading(o.level)}>
-                  ${o.level === currentLevel ? html`<span className="tb-dd-check">\u2713</span>` : html`<span className="tb-dd-check" />`}
+                  ${o.level === currentLevel
+                    ? html`<span className="tb-dd-check">${'\u2713'}</span>`
+                    : html`<span className="tb-dd-check" />`}
                   <span className=${o.cls}>${o.label}</span>
                 </button>
               `)}
             </div>
-          ` : null}
+          `}
         </div>
 
         <div className="tb-div" />
-
-        <!-- Text formatting: B U I <> S -->
-        ${btn('tb-fmt tb-b', editor?.isActive('bold'), d, 'Bold', () => editor.chain().focus().toggleBold().run(), 'B')}
-        ${btn('tb-fmt tb-u', editor?.isActive('underline'), d, 'Underline', () => editor.chain().focus().toggleUnderline().run(), 'U')}
-        ${btn('tb-fmt tb-i', editor?.isActive('italic'), d, 'Italic', () => editor.chain().focus().toggleItalic().run(), 'I')}
-        ${btn('tb-fmt tb-code', editor?.isActive('code'), d, 'Code', () => editor.chain().focus().toggleCode().run(), html`<span>${'<>'}</span>`)}
-        ${btn('tb-fmt tb-s', editor?.isActive('strike'), d, 'Strikethrough', () => editor.chain().focus().toggleStrike().run(), 'S')}
+        ${tb('tb-fmt tb-b', editor?.isActive('bold'), off, 'Bold (Ctrl+B)', () => editor.chain().focus().toggleBold().run(), 'B')}
+        ${tb('tb-fmt tb-u', editor?.isActive('underline'), off, 'Underline (Ctrl+U)', () => editor.chain().focus().toggleUnderline().run(), 'U')}
+        ${tb('tb-fmt tb-i', editor?.isActive('italic'), off, 'Italic (Ctrl+I)', () => editor.chain().focus().toggleItalic().run(), 'I')}
+        ${tb('tb-fmt tb-code', editor?.isActive('code'), off, 'Inline code', () => editor.chain().focus().toggleCode().run(), html`<span>${'<>'}</span>`)}
+        ${tb('tb-fmt tb-s', editor?.isActive('strike'), off, 'Strikethrough', () => editor.chain().focus().toggleStrike().run(), 'S')}
 
         <div className="tb-div" />
 
-        <!-- Blockquote -->
-        ${btn('tb-icon', editor?.isActive('blockquote'), d, 'Quote', () => editor.chain().focus().toggleBlockquote().run(),
-          html`<${Ico} d="M3 5h3v3H4.5L3 11 M10 5h3v3h-1.5L10 11" />`)}
+        ${tb('tb-icon', editor?.isActive('blockquote'), off, 'Quote', () => editor.chain().focus().toggleBlockquote().run(), I_QUOTE)}
 
         <div className="tb-div" />
 
-        <!-- Lists -->
-        ${btn('tb-icon', editor?.isActive('bulletList'), d, 'Bullet list', () => editor.chain().focus().toggleBulletList().run(),
-          html`<${Ico} d="M7 5h8M7 9h8M7 13h8" /><circle cx="3.5" cy="5" r="1.2" fill="currentColor" stroke="none" /><circle cx="3.5" cy="9" r="1.2" fill="currentColor" stroke="none" /><circle cx="3.5" cy="13" r="1.2" fill="currentColor" stroke="none" />`)}
-        ${btn('tb-icon', editor?.isActive('orderedList'), d, 'Numbered list', () => editor.chain().focus().toggleOrderedList().run(),
-          html`<${Ico} d="M8 5h7M8 9h7M8 13h7" /><text x="2" y="6.5" fontSize="5.5" fill="currentColor" stroke="none" fontWeight="600" fontFamily="system-ui">1</text><text x="2" y="10.5" fontSize="5.5" fill="currentColor" stroke="none" fontWeight="600" fontFamily="system-ui">2</text><text x="2" y="14.5" fontSize="5.5" fill="currentColor" stroke="none" fontWeight="600" fontFamily="system-ui">3</text>`)}
+        ${tb('tb-icon', editor?.isActive('bulletList'), off, 'Bullet list', () => editor.chain().focus().toggleBulletList().run(), I_UL)}
+        ${tb('tb-icon', editor?.isActive('orderedList'), off, 'Numbered list', () => editor.chain().focus().toggleOrderedList().run(), I_OL)}
 
         <div className="tb-div" />
 
-        <!-- Link (placeholder) -->
-        ${btn('tb-icon', false, d, 'Insert link (coming soon)', () => {}, html`<${Ico} d="M8 12H6a3 3 0 0 1 0-6h2M10 6h2a3 3 0 0 1 0 6h-2M6.5 9h5" />`)}
-        <!-- Horizontal rule -->
-        ${btn('tb-icon', false, d, 'Divider', () => editor.chain().focus().setHorizontalRule().run(),
-          html`<${Ico} d="M3 9h12" />`)}
-        <!-- Code block -->
-        ${btn('tb-icon', editor?.isActive('codeBlock'), d, 'Code block', () => editor.chain().focus().toggleCodeBlock().run(),
-          html`<${Ico} d="M6 4L2 9l4 5M12 4l4 5-4 5" />`)}
+        ${tb('tb-icon', editor?.isActive('link'), off, 'Insert link', insertLink, I_LINK)}
+        ${tb('tb-icon', false, off, 'Divider', () => editor.chain().focus().setHorizontalRule().run(), I_HR)}
+        ${tb('tb-icon', editor?.isActive('codeBlock'), off, 'Code block', () => editor.chain().focus().toggleCodeBlock().run(), I_CODEBLOCK)}
 
         <div className="tb-div" />
 
-        <!-- Widget -->
-        <button type="button" className="tb tb-widget" disabled=${d} onClick=${onOpenWidgetModal}>
-          <svg width="14" height="14" viewBox="0 0 14 14"><line x1="7" y1="2" x2="7" y2="12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/><line x1="2" y1="7" x2="12" y2="7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/></svg>
-          Widget
+        <button type="button" className="tb tb-widget" disabled=${off} onClick=${onOpenWidgetModal}>
+          ${I_PLUS} Widget
         </button>
       </div>
 
       <div className="toolbar-right">
-        <button type="button" className="tb-action" onClick=${onExport || (() => {})}>
-          Export
-          <svg width="8" height="5" viewBox="0 0 8 5"><path d="M1 1l3 3 3-3" stroke="currentColor" strokeWidth="1.3" fill="none" strokeLinecap="round" /></svg>
-        </button>
-        <button type="button" className="tb-action tb-share" onClick=${onShare || (() => {})}>Share</button>
+        <button type="button" className="tb-action" onClick=${() => {}}>Export ${I_CHEV}</button>
+        <button type="button" className="tb-action tb-share" onClick=${() => {}}>Share</button>
       </div>
     </div>
   `;
