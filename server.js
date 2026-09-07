@@ -256,6 +256,50 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // --------------- Document listing ---------------
+  if (req.method === 'GET' && url.pathname === '/api/documents') {
+    try {
+      const files = await fsp.readdir(dataDir).catch(() => []);
+      const docs = [];
+      for (const file of files) {
+        if (!file.endsWith('.json')) continue;
+        const id = file.replace(/\.json$/, '');
+        const filePath = path.join(dataDir, file);
+        const stat = await fsp.stat(filePath);
+        let title = id;
+        try {
+          const raw = JSON.parse(await fsp.readFile(filePath, 'utf8'));
+          const content = raw.content || raw;
+          const firstHeading = (content.content || []).find(n => n.type === 'heading');
+          if (firstHeading?.content?.[0]?.text) title = firstHeading.content[0].text;
+        } catch (_) { /* ignore */ }
+        docs.push({ id, title, updatedAt: stat.mtime.toISOString() });
+      }
+      docs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+      sendJson(res, 200, { documents: docs });
+      return true;
+    } catch (err) {
+      sendJson(res, 500, { error: err.message });
+      return true;
+    }
+  }
+
+  if (req.method === 'DELETE' && url.pathname.startsWith('/api/documents/')) {
+    try {
+      const filePath = getDocumentPath(documentId);
+      await fsp.unlink(filePath);
+      sendJson(res, 200, { deleted: true });
+      return true;
+    } catch (err) {
+      if (err.code === 'ENOENT') {
+        sendJson(res, 404, { error: 'Not found' });
+      } else {
+        sendJson(res, 500, { error: err.message });
+      }
+      return true;
+    }
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/health') {
     sendJson(res, 200, { ok: true, service: 'reporting-distribution-app', runtime: 'node' });
     return true;
