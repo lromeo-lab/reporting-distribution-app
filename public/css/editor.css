@@ -157,7 +157,9 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
   display: flex; align-items: center; justify-content: space-between;
   gap: 4px;
 }
-.toolbar-left { display: flex; align-items: center; gap: 1px; }
+.toolbar-left { display: flex; align-items: center; gap: 1px; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+
+.toolbar-left::-webkit-scrollbar { display: none; }
 .toolbar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
 .tb-div { width: 1px; height: 20px; background: var(--gray-200); margin: 0 5px; flex-shrink: 0; }

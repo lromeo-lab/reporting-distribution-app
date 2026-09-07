@@ -21,7 +21,15 @@
 export async function exportToPDF(canvasEl, title, opts = {}) {
   if (!canvasEl) throw new Error('No editor canvas element provided');
 
-  const { default: html2pdf } = await import('html2pdf.js');
+  // html2pdf.js is a CJS module; esm.sh wraps it — the callable may be
+  // at .default, .default.default, or at the module root depending on the wrapper.
+  const mod = await import('html2pdf.js');
+  const html2pdf = typeof mod.default === 'function' ? mod.default
+    : typeof mod.default?.default === 'function' ? mod.default.default
+    : mod;
+  if (typeof html2pdf !== 'function') {
+    throw new Error('html2pdf loaded but is not callable: ' + typeof html2pdf);
+  }
 
   // 1. Deep-clone the canvas so we can mutate freely
   const clone = canvasEl.cloneNode(true);
