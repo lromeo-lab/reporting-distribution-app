@@ -1,199 +1,108 @@
 /**
- * Export utilities for AI/BI Report Studio
- * PDF: jsPDF + html2canvas.  Widget screenshots via server-side Puppeteer.
+ * Export utilities — AI/BI Report Studio
+ * Clean PDF generation via jsPDF + html2canvas (both loaded from esm.sh).
  */
 
-const A4_W_MM = 210;
-const A4_H_MM = 297;
-const MARGIN   = 15;
-const MARGIN_B = 20;
-const CONTENT_W = A4_W_MM - MARGIN * 2;
-const CONTENT_H = A4_H_MM - MARGIN - MARGIN_B;
+const A4 = { w: 210, h: 297 };          // mm
+const MARGIN = { top: 15, left: 15, bottom: 20, right: 15 }; // mm
+const CONTENT = {
+  w: A4.w - MARGIN.left - MARGIN.right,  // 180mm
+  h: A4.h - MARGIN.top - MARGIN.bottom,  // 262mm
+};
+const RENDER_W = 794;  // A4 width in px at 96dpi
 
 /**
- * Capture a widget screenshot via the server Puppeteer endpoint.
- * Returns a base64 data URL or null on failure.
- */
-async function captureWidgetScreenshot(embedUrl) {
-  try {
-    const resp = await fetch('/api/proxy/widget-screenshot?url=' + encodeURIComponent(embedUrl));
-    if (!resp.ok) return null;
-    const blob = await resp.blob();
-    return await new Promise(resolve => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result);
-      reader.readAsDataURL(blob);
-    });
-  } catch (err) {
-    console.warn('[export] Screenshot failed for', embedUrl, err);
-    return null;
-  }
-}
-
-/**
- * Build a placeholder element for widgets that couldn't be screenshotted.
- */
-function buildPlaceholder(widgetTitle) {
-  const el = document.createElement('div');
-  Object.assign(el.style, {
-    border: '2px dashed #cbd5e1', borderRadius: '12px',
-    padding: '28px 20px', textAlign: 'center',
-    background: '#f8fafc', margin: '16px 0',
-  });
-  el.innerHTML =
-    '<div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:6px">' +
-    '\u{1F4CA} ' + widgetTitle + '</div>' +
-    '<div style="font-size:11px;color:#64748b">Interactive dashboard widget</div>';
-  return el;
-}
-
-/**
- * Export the editor canvas as an A4 PDF.
+ * Export editor content as a multi-page A4 PDF.
  *
- * 1. Clone editor DOM
- * 2. For each widget, try server-side Puppeteer screenshot → <img>;
- *    fallback to placeholder
- * 3. html2canvas → slice into A4 pages → jsPDF → download
+ * @param {HTMLElement} canvasEl – the .editor-canvas DOM element
+ * @param {string}      title   – document title (used as filename)
+ * @param {function}    onProgress – optional (msg) => void for UI feedback
  */
 export async function exportToPDF(canvasEl, title, onProgress) {
-  if (!canvasEl) throw new Error('No editor canvas element provided');
+  if (!canvasEl) throw new Error('No editor canvas element');
+  const report = msg => onProgress?.(msg);
 
-  const report = (msg) => onProgress && onProgress(msg);
-
-  // Dynamic imports
-  report('Loading export libraries...');
-  const [{ default: jsPDF }, html2canvasMod] = await Promise.all([
-    import('jspdf'),
-    import('html2canvas'),
+  report('Loading libraries…');
+  const [{ default: jsPDF }, h2cMod] = await Promise.all([
+    import('jspdf'), import('html2canvas'),
   ]);
-  const html2canvas = html2canvasMod.default || html2canvasMod;
+  const html2canvas = h2cMod.default ?? h2cMod;
 
-  // 1. Clone
-  report('Preparing document...');
+  // ── Clone & prepare ──
+  report('Preparing document…');
   const clone = canvasEl.cloneNode(true);
-  const renderW = 794;
   Object.assign(clone.style, {
     position: 'fixed', left: '-9999px', top: '0',
-    width: renderW + 'px',
-    padding: '40px 48px',
+    width: RENDER_W + 'px', padding: '40px 48px',
     border: 'none', boxShadow: 'none', borderRadius: '0',
-    background: '#ffffff',
+    background: '#fff',
   });
 
-  // 2. Capture widget screenshots
-  const wraps = clone.querySelectorAll('.widget-wrap');
-  if (wraps.length > 0) {
-    report(`Capturing ${wraps.length} widget(s)...`);
-    // Get embed URLs from the ORIGINAL (clone iframes may have lost src)
-    const origWraps = canvasEl.querySelectorAll('.widget-wrap');
-    for (let i = 0; i < wraps.length; i++) {
-      const origIframe = origWraps[i]?.querySelector('iframe');
-      const cloneWrap = wraps[i];
-      const titleEl = cloneWrap.querySelector('.widget-toolbar-title');
-      const widgetTitle = titleEl?.textContent || 'Dashboard Widget';
-      const embedUrl = origIframe?.src || '';
+  // Replace widget iframes → styled placeholders
+  clone.querySelectorAll('.widget-wrap').forEach(wrap => {
+    const t = wrap.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';
+    const ph = document.createElement('div');
+    ph.style.cssText = 'border:2px dashed #cbd5e1;border-radius:12px;padding:28px 20px;text-align:center;background:#f8fafc;margin:16px 0;page-break-inside:avoid';
+    ph.innerHTML = `<div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:6px">\u{1F4CA} ${t}</div><div style="font-size:11px;color:#64748b">Interactive dashboard widget — view online</div>`;
+    wrap.replaceWith(ph);
+  });
 
-      report(`Screenshot ${i + 1}/${wraps.length}: ${widgetTitle}`);
+  // Remove any overlay UI from clone
+  clone.querySelectorAll('.widget-toolbar,.widget-resize-bar,.page-break-line').forEach(el => el.remove());
 
-      let replacement;
-      if (embedUrl) {
-        const dataUrl = await captureWidgetScreenshot(embedUrl);
-        if (dataUrl) {
-          replacement = document.createElement('div');
-          Object.assign(replacement.style, {
-            margin: '16px 0',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            border: '1px solid #e2e8f0',
-          });
-          const img = document.createElement('img');
-          img.src = dataUrl;
-          Object.assign(img.style, {
-            width: '100%', height: 'auto', display: 'block',
-          });
-          replacement.appendChild(img);
-        }
-      }
-      if (!replacement) {
-        replacement = buildPlaceholder(widgetTitle);
-      }
-      cloneWrap.replaceWith(replacement);
-    }
-  }
-
-  // Clean up hover toolbars
-  clone.querySelectorAll('.widget-toolbar, .widget-resize-bar').forEach(el => el.remove());
-
-  // Add header
+  // Branding header
   const hdr = document.createElement('div');
-  Object.assign(hdr.style, {
-    fontSize: '10px', color: '#94a3b8', marginBottom: '12px',
-    paddingBottom: '8px', borderBottom: '1px solid #e2e8f0',
-    display: 'flex', justifyContent: 'space-between',
-  });
-  hdr.innerHTML = '<span>AI/BI Report Studio</span><span>' + new Date().toLocaleDateString() + '</span>';
+  hdr.style.cssText = 'font-size:10px;color:#94a3b8;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #e2e8f0;display:flex;justify-content:space-between';
+  hdr.innerHTML = `<span>AI/BI Report Studio</span><span>${new Date().toLocaleDateString()}</span>`;
   clone.insertBefore(hdr, clone.firstChild);
 
   document.body.appendChild(clone);
 
   try {
-    // 3. Render to canvas
-    report('Rendering pages...');
+    // ── Render to canvas ──
+    report('Rendering…');
     const canvas = await html2canvas(clone, {
-      scale: 2,
-      useCORS: true,
-      letterRendering: true,
-      scrollY: 0,
-      width: renderW,
-      windowWidth: renderW,
+      scale: 2, useCORS: true, letterRendering: true,
+      scrollY: 0, width: RENDER_W, windowWidth: RENDER_W,
     });
 
-    // 4. Slice into A4 pages
-    report('Generating PDF...');
+    // ── Build PDF: slice canvas into A4 pages ──
+    report('Generating PDF…');
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-    const imgW = CONTENT_W;
-    const imgH = (canvas.height * CONTENT_W) / canvas.width;
-    const pageH = CONTENT_H;
-    let yOffset = 0;
-    let page = 0;
+    const totalH = (canvas.height * CONTENT.w) / canvas.width; // total content height in mm
+    let y = 0, page = 0;
 
-    while (yOffset < imgH) {
+    while (y < totalH) {
       if (page > 0) pdf.addPage();
-      const srcY = (yOffset / imgH) * canvas.height;
-      const srcH = Math.min((pageH / imgH) * canvas.height, canvas.height - srcY);
-      const sliceH = (srcH / canvas.height) * imgH;
 
-      const sliceCanvas = document.createElement('canvas');
-      sliceCanvas.width = canvas.width;
-      sliceCanvas.height = Math.round(srcH);
-      const ctx = sliceCanvas.getContext('2d');
-      ctx.drawImage(canvas, 0, Math.round(srcY), canvas.width, Math.round(srcH), 0, 0, canvas.width, Math.round(srcH));
+      const srcY  = Math.round((y / totalH) * canvas.height);
+      const srcH  = Math.min(Math.round((CONTENT.h / totalH) * canvas.height), canvas.height - srcY);
+      const sliceH = (srcH / canvas.height) * totalH;
 
-      const imgData = sliceCanvas.toDataURL('image/jpeg', 0.92);
-      pdf.addImage(imgData, 'JPEG', MARGIN, MARGIN, imgW, sliceH);
+      const slice = document.createElement('canvas');
+      slice.width = canvas.width;
+      slice.height = srcH;
+      slice.getContext('2d').drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
 
-      // Page number footer
-      pdf.setFontSize(8);
-      pdf.setTextColor(148, 163, 184);
-      pdf.text(`Page ${page + 1}`, A4_W_MM / 2, A4_H_MM - 8, { align: 'center' });
+      pdf.addImage(slice.toDataURL('image/jpeg', 0.92), 'JPEG', MARGIN.left, MARGIN.top, CONTENT.w, sliceH);
 
-      yOffset += pageH;
+      // Footer: page number
+      pdf.setFontSize(8).setTextColor(148, 163, 184);
+      pdf.text(`${page + 1}`, A4.w / 2, A4.h - 8, { align: 'center' });
+
+      y += CONTENT.h;
       page++;
     }
 
-    // 5. Download
-    const filename = (title || 'report')
-      .replace(/[^a-zA-Z0-9_\-\s]/g, '')
-      .replace(/\s+/g, '-')
-      .toLowerCase();
-    pdf.save(filename + '.pdf');
-    report('Done!');
-
+    // ── Download ──
+    const filename = (title || 'report').replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '-').toLowerCase();
+    pdf.save(`${filename}.pdf`);
+    report('');
   } finally {
     document.body.removeChild(clone);
   }
 }
 
-// ── Placeholder exports ──
-export async function exportToDOCX() { throw new Error('DOCX export coming soon'); }
-export async function exportToPPTX() { throw new Error('PPTX export coming soon'); }
+// Stubs for future formats
+export async function exportToDOCX() { throw new Error('Coming soon'); }
+export async function exportToPPTX() { throw new Error('Coming soon'); }
