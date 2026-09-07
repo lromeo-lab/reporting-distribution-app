@@ -11,6 +11,54 @@ import { I18nProvider, useI18n } from './utils/i18n.js';
 
 const html = htm.bind(React.createElement);
 
+const BLANK_DOC = { type: 'doc', content: [{ type: 'paragraph' }] };
+
+// ── New Document Modal ──
+function NewDocModal({ onClose, onCreate }) {
+  const [name, setName] = useState('');
+  const inputRef = useRef(null);
+  useEffect(() => { inputRef.current?.focus(); }, []);
+  const handleCreate = () => {
+    const id = name.trim().replace(/[^a-zA-Z0-9_-]/g, '-').replace(/-+/g, '-').toLowerCase();
+    if (!id) return;
+    onCreate(id);
+  };
+  return html`
+    <div className="modal-backdrop" onClick=${onClose}>
+      <div className="modal-card modal-sm" onClick=${e => e.stopPropagation()}>
+        <h3>New report</h3>
+        <p>Give your report a name. You can change it later by editing the first heading.</p>
+        <input ref=${inputRef} type="text" className="modal-input"
+          placeholder="e.g. Q3 Revenue Analysis"
+          value=${name} onInput=${e => setName(e.target.value)}
+          onKeyDown=${e => e.key === 'Enter' && handleCreate()} />
+        <div className="modal-actions">
+          <button type="button" onClick=${onClose}>Cancel</button>
+          <button type="button" className="confirm" onClick=${handleCreate}
+            disabled=${!name.trim()}>Create</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Delete Confirmation Modal ──
+function DeleteModal({ docId, onClose, onConfirm }) {
+  return html`
+    <div className="modal-backdrop" onClick=${onClose}>
+      <div className="modal-card modal-sm" onClick=${e => e.stopPropagation()}>
+        <h3>Delete report</h3>
+        <p>Are you sure you want to delete <strong>${docId}</strong>? This cannot be undone.</p>
+        <div className="modal-actions">
+          <button type="button" onClick=${onClose}>Cancel</button>
+          <button type="button" className="confirm danger" onClick=${() => onConfirm(docId)}>Delete</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Manual Widget Modal ──
 function ManualWidgetModal({ formState, onChange, onClose, onSubmit, onSwitchBrowse }) {
   const { t } = useI18n();
   return html`
@@ -43,6 +91,7 @@ function ManualWidgetModal({ formState, onChange, onClose, onSubmit, onSwitchBro
   `;
 }
 
+// ── Main App ──
 function App() {
   const [editor, setEditor] = useState(null);
   const [documentContent, setDocumentContent] = useState(null);
@@ -52,7 +101,8 @@ function App() {
   const [status, setStatus] = useState('loading');
   const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState('');
-  const [modalMode, setModalMode] = useState(null);
+  const [modalMode, setModalMode] = useState(null); // null|'picker'|'manual'|'newdoc'|'delete'
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [widgetForm, setWidgetForm] = useState({ title: '', src: '', caption: '', height: '380' });
   const latestContentRef = useRef(null);
   const hasLoadedRef = useRef(false);
@@ -75,11 +125,10 @@ function App() {
   const statusClass = status === 'saving' ? 'status saving'
     : (status === 'saved' || savedAt) ? 'status saved' : 'status';
 
-  // ---- Persistence ----
+  // ── Persistence ──
   const persist = useCallback(async () => {
     if (!latestContentRef.current) return;
-    setStatus('saving');
-    setError('');
+    setStatus('saving'); setError('');
     try {
       const saved = await saveDocument(activeDocId, latestContentRef.current);
       dirtyRef.current = false;
@@ -87,46 +136,40 @@ function App() {
       setStatus('saved');
       refreshDocList();
     } catch (e) {
-      console.error(e);
-      setStatus('error');
-      setError(t('backendError'));
+      console.error(e); setStatus('error'); setError(t('backendError'));
     }
   }, [activeDocId]);
 
-  // ---- Document list ----
   const refreshDocList = useCallback(async () => {
     try {
       const data = await listDocuments();
       setDocuments(data.documents || []);
-    } catch (_) { /* ignore */ }
+    } catch (_) {}
   }, []);
 
-  // ---- Bootstrap ----
+  // ── Bootstrap ──
   useEffect(() => {
     async function boot() {
       hasLoadedRef.current = false;
-      setDocumentContent(null);
-      setEditor(null);
-      setStatus('loading');
-      setError('');
+      setDocumentContent(null); setEditor(null);
+      setStatus('loading'); setError('');
       try {
         const stored = await loadDocument(activeDocId);
-        const content = stored?.content || createSeedDocument(t);
+        // Only use seed for the 'default' doc if it doesn't exist yet
+        const content = stored?.content || (activeDocId === 'default' ? createSeedDocument(t) : BLANK_DOC);
         latestContentRef.current = content;
         setDocumentContent(content);
         setSavedAt(stored?.updatedAt || null);
         setStatus(stored ? 'saved' : 'dirty');
         if (!stored) {
           dirtyRef.current = true;
-          // Auto-save new seed document
           try { await saveDocument(activeDocId, content); } catch (_) {}
         }
       } catch (_) {
-        const fallback = createSeedDocument(t);
+        const fallback = activeDocId === 'default' ? createSeedDocument(t) : BLANK_DOC;
         latestContentRef.current = fallback;
         setDocumentContent(fallback);
-        setStatus('dirty');
-        dirtyRef.current = true;
+        setStatus('dirty'); dirtyRef.current = true;
       }
       hasLoadedRef.current = true;
       editorKeyRef.current += 1;
@@ -135,7 +178,6 @@ function App() {
     refreshDocList();
   }, [activeDocId]);
 
-  // Auto-save timer
   useEffect(() => {
     const id = setInterval(() => {
       if (hasLoadedRef.current && dirtyRef.current) persist();
@@ -143,13 +185,10 @@ function App() {
     return () => clearInterval(id);
   }, [persist]);
 
-  // ---- Callbacks ----
+  // ── Callbacks ──
   const handleContentChange = useCallback(next => {
     latestContentRef.current = next;
-    if (hasLoadedRef.current) {
-      dirtyRef.current = true;
-      setStatus('dirty');
-    }
+    if (hasLoadedRef.current) { dirtyRef.current = true; setStatus('dirty'); }
   }, []);
 
   const handleSelectDoc = useCallback(id => {
@@ -160,85 +199,61 @@ function App() {
     setActiveDocId(id);
   }, [activeDocId]);
 
-  const handleNewDoc = useCallback(async () => {
-    const name = window.prompt('Report name (no spaces, e.g. q3-analysis)');
-    if (!name) return;
-    const id = name.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
-    if (!id) return;
+  const handleNewDoc = useCallback(async id => {
+    setModalMode(null);
     try {
-      const seed = createSeedDocument(t);
-      await saveDocument(id, seed);
+      await saveDocument(id, BLANK_DOC);
       await refreshDocList();
       setActiveDocId(id);
-    } catch (e) {
-      setError(e.message);
-    }
-  }, [t, refreshDocList]);
+    } catch (e) { setError(e.message); }
+  }, [refreshDocList]);
 
-  const handleDeleteDoc = useCallback(async id => {
-    if (!window.confirm(`Delete report "${id}"?`)) return;
+  const handleRequestDelete = useCallback(id => {
+    setDeleteTarget(id);
+    setModalMode('delete');
+  }, []);
+
+  const handleConfirmDelete = useCallback(async id => {
+    setModalMode(null); setDeleteTarget(null);
     try {
       await deleteDocument(id);
       await refreshDocList();
       if (id === activeDocId) setActiveDocId('default');
-    } catch (e) {
-      setError(e.message);
-    }
+    } catch (e) { setError(e.message); }
   }, [activeDocId, refreshDocList]);
 
-  // ---- Widget insertion ----
+  // ── Widget insertion ──
   const insertWidget = useCallback(widget => {
     if (!editor) return;
     editor.chain().focus().insertDatabricksWidget({
-      title: widget.title || '',
-      src: widget.src,
-      caption: widget.caption || '',
-      height: Number(widget.height || 380),
+      title: widget.title || '', src: widget.src,
+      caption: widget.caption || '', height: Number(widget.height || 380),
     }).run();
   }, [editor]);
 
   const handlePickerSelect = useCallback(widget => {
-    insertWidget(widget);
-    setModalMode(null);
+    insertWidget(widget); setModalMode(null);
   }, [insertWidget]);
 
   const handleSubmitWidget = useCallback(() => {
-    if (!widgetForm.src.includes('/embed/dashboardsv3/')) {
-      setError(t('invalidUrl'));
-      return;
-    }
-    insertWidget(widgetForm);
-    setModalMode(null);
-    setWidgetForm({ title: '', src: '', caption: '', height: '380' });
-    setError('');
+    if (!widgetForm.src.includes('/embed/dashboardsv3/')) { setError(t('invalidUrl')); return; }
+    insertWidget(widgetForm); setModalMode(null);
+    setWidgetForm({ title: '', src: '', caption: '', height: '380' }); setError('');
   }, [insertWidget, widgetForm]);
 
-  const handleResetDocument = useCallback(() => {
-    const next = createSeedDocument(t);
-    latestContentRef.current = next;
-    setDocumentContent(next);
-    editorKeyRef.current += 1;
-    dirtyRef.current = true;
-    setStatus('dirty');
-    setError('');
-  }, [t]);
-
-  // ---- Render ----
+  // ── Render ──
   return html`
     <div className=${`app-shell ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
-      <!-- Unified Top Bar -->
       <header className="unified-bar">
         <div className="bar-left">
           <button className="bar-toggle" onClick=${() => setSidebarOpen(o => !o)} title="Toggle sidebar">
-            ${sidebarOpen ? '\u2630' : '\u2630'}
+            <svg width="18" height="18" viewBox="0 0 18 18"><line x1="3" y1="5" x2="15" y2="5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="9" x2="15" y2="9" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/><line x1="3" y1="13" x2="15" y2="13" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
           </button>
           <span className="bar-brand">AI/BI Report Studio</span>
         </div>
-
         <div className="bar-center">
           <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} />
         </div>
-
         <div className="bar-right">
           <select className="lang-select" value=${locale} onChange=${e => setLocale(e.target.value)}>
             ${locales.map(l => html`<option key=${l} value=${l}>${l.toUpperCase()}</option>`)}
@@ -248,46 +263,38 @@ function App() {
         </div>
       </header>
 
-      <!-- Main area: sidebar + canvas -->
       <div className="main-area">
         <${Sidebar}
-          documents=${documents}
-          activeDocId=${activeDocId}
+          documents=${documents} activeDocId=${activeDocId}
           onSelectDoc=${handleSelectDoc}
-          onNewDoc=${handleNewDoc}
-          onDeleteDoc=${handleDeleteDoc}
+          onNewDoc=${() => setModalMode('newdoc')}
+          onDeleteDoc=${handleRequestDelete}
           collapsed=${!sidebarOpen}
-          onToggleCollapse=${() => setSidebarOpen(o => !o)}
         />
         <section className="canvas-area">
           ${error ? html`<div className="error-banner">${error}</div>` : null}
           ${documentContent
-            ? html`<${DocumentEditor}
-                key=${editorKeyRef.current}
-                initialContent=${documentContent}
-                onEditorReady=${setEditor}
-                onContentChange=${handleContentChange}
-                placeholderText=${t('editorPlaceholder')}
-              />`
+            ? html`<${DocumentEditor} key=${editorKeyRef.current}
+                initialContent=${documentContent} onEditorReady=${setEditor}
+                onContentChange=${handleContentChange} placeholderText=${t('editorPlaceholder')} />`
             : html`<div className="canvas-loading">Loading...</div>`}
         </section>
       </div>
 
-      <!-- Modals -->
-      ${modalMode === 'picker' ? html`
-        <${WidgetPicker}
-          onSelect=${handlePickerSelect}
-          onClose=${() => setModalMode(null)}
-          onSwitchManual=${() => setModalMode('manual')}
-        />` : null}
-      ${modalMode === 'manual' ? html`
-        <${ManualWidgetModal}
-          formState=${widgetForm}
-          onChange=${(f, v) => setWidgetForm(cur => ({ ...cur, [f]: v }))}
-          onClose=${() => { setModalMode(null); setWidgetForm({ title: '', src: '', caption: '', height: '380' }); }}
-          onSubmit=${handleSubmitWidget}
-          onSwitchBrowse=${() => setModalMode('picker')}
-        />` : null}
+      ${modalMode === 'newdoc' ? html`<${NewDocModal}
+        onClose=${() => setModalMode(null)} onCreate=${handleNewDoc} />` : null}
+      ${modalMode === 'delete' && deleteTarget ? html`<${DeleteModal}
+        docId=${deleteTarget} onClose=${() => setModalMode(null)}
+        onConfirm=${handleConfirmDelete} />` : null}
+      ${modalMode === 'picker' ? html`<${WidgetPicker}
+        onSelect=${handlePickerSelect} onClose=${() => setModalMode(null)}
+        onSwitchManual=${() => setModalMode('manual')} />` : null}
+      ${modalMode === 'manual' ? html`<${ManualWidgetModal}
+        formState=${widgetForm}
+        onChange=${(f, v) => setWidgetForm(c => ({ ...c, [f]: v }))}
+        onClose=${() => { setModalMode(null); setWidgetForm({ title: '', src: '', caption: '', height: '380' }); }}
+        onSubmit=${handleSubmitWidget}
+        onSwitchBrowse=${() => setModalMode('picker')} />` : null}
     </div>
   `;
 }
