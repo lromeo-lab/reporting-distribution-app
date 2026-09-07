@@ -1,0 +1,9 @@
+{
+  "name": "reporting-distribution-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "puppeteer": "^24.0.0"
+  }
+}

@@ -139,6 +139,71 @@ function parseWidgetsFromDashboard(dashboardId, raw) {
   return { dashboardId, displayName: raw.display_name, pages };
 }
 
+
+// --------------- Puppeteer Screenshot Engine ---------------
+let _browser = null;
+let _browserPromise = null;
+
+async function getBrowser() {
+  if (_browser && _browser.connected) return _browser;
+  if (_browserPromise) return _browserPromise;
+  _browserPromise = (async () => {
+    try {
+      const puppeteer = await import('puppeteer');
+      _browser = await puppeteer.default.launch({
+        headless: 'new',
+        args: [
+          '--no-sandbox',
+          '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
+          '--disable-gpu',
+          '--single-process',
+        ],
+      });
+      console.log('[puppeteer] Browser launched');
+      _browser.on('disconnected', () => { _browser = null; _browserPromise = null; });
+      return _browser;
+    } catch (err) {
+      _browserPromise = null;
+      console.error('[puppeteer] Failed to launch:', err.message);
+      throw err;
+    }
+  })();
+  return _browserPromise;
+}
+
+async function screenshotWidget(embedUrl) {
+  const token = await getAccessToken();
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setViewport({ width: 900, height: 600 });
+    await page.setExtraHTTPHeaders({ Authorization: `Bearer ${token}` });
+    console.log('[screenshot] Navigating to:', embedUrl.slice(0, 100));
+    await page.goto(embedUrl, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // Wait for chart content to render — try common selectors
+    try {
+      await page.waitForSelector('canvas, svg.vega-bindmgs, .rv-svg, [class*="chart"], [class*="widget-content"]', { timeout: 10000 });
+    } catch (_) {
+      // Fallback: just wait a bit for rendering
+      await new Promise(r => setTimeout(r, 3000));
+    }
+    // Extra settle time for animations
+    await new Promise(r => setTimeout(r, 1500));
+
+    const screenshot = await page.screenshot({
+      type: 'png',
+      fullPage: false,
+      clip: { x: 0, y: 0, width: 900, height: 600 },
+    });
+    console.log('[screenshot] Captured', screenshot.length, 'bytes');
+    return screenshot;
+  } finally {
+    await page.close();
+  }
+}
+
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
@@ -338,6 +403,30 @@ async function handleApi(req, res, url) {
     } catch (err) {
       console.error('Widget list error:', err.message);
       sendJson(res, 502, { error: err.message });
+      return true;
+    }
+  }
+
+
+  // --------------- Widget screenshot ---------------
+  if (req.method === 'GET' && url.pathname === '/api/proxy/widget-screenshot') {
+    const embedUrl = url.searchParams.get('url');
+    if (!embedUrl) {
+      sendJson(res, 400, { error: 'Missing url parameter' });
+      return true;
+    }
+    try {
+      const png = await screenshotWidget(embedUrl);
+      res.writeHead(200, {
+        'Content-Type': 'image/png',
+        'Content-Length': png.length,
+        'Cache-Control': 'private, max-age=300',
+      });
+      res.end(png);
+      return true;
+    } catch (err) {
+      console.error('[screenshot] Error:', err.message);
+      sendJson(res, 500, { error: 'Screenshot failed: ' + err.message });
       return true;
     }
   }

@@ -105,6 +105,7 @@ function App() {
   const [modalMode, setModalMode] = useState(null); // null|'picker'|'manual'|'newdoc'|'delete'
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [widgetForm, setWidgetForm] = useState({ title: '', src: '', caption: '', height: '380' });
+  const [pageBreaks, setPageBreaks] = useState([]);
   const latestContentRef = useRef(null);
   const hasLoadedRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -186,6 +187,34 @@ function App() {
     return () => clearInterval(id);
   }, [persist]);
 
+
+  // ── A4 Page break indicators ──
+  useEffect(() => {
+    const canvas = document.querySelector('.editor-canvas');
+    if (!canvas) return;
+    const A4_RATIO = 297 / 210;
+    const MARGIN_FRAC = (15 + 20) / 297; // top 15mm + bottom 20mm margins
+    const update = () => {
+      const w = canvas.offsetWidth;
+      const fullPageH = w * A4_RATIO;
+      const usableH = fullPageH * (1 - MARGIN_FRAC);
+      const totalH = canvas.scrollHeight;
+      const breaks = [];
+      let y = usableH;
+      while (y < totalH - 50) {
+        breaks.push(Math.round(y));
+        y += usableH;
+      }
+      setPageBreaks(breaks);
+    };
+    const ro = new ResizeObserver(update);
+    ro.observe(canvas);
+    const mo = new MutationObserver(update);
+    mo.observe(canvas, { childList: true, subtree: true, characterData: true, attributes: true });
+    update();
+    return () => { ro.disconnect(); mo.disconnect(); };
+  }, [editorKeyRef.current]);
+
   // ── Callbacks ──
   const handleContentChange = useCallback(next => {
     latestContentRef.current = next;
@@ -224,20 +253,23 @@ function App() {
   }, [activeDocId, refreshDocList]);
 
 
+  const [exportMsg, setExportMsg] = useState('');
   const handleExportPDF = useCallback(async () => {
     const canvas = document.querySelector('.editor-canvas');
     if (!canvas) { setError('Cannot find editor canvas for export'); return; }
-    // Get title from first heading or activeDocId
     const firstH = canvas.querySelector('h1, h2, h3');
     const docTitle = firstH?.textContent || activeDocId || 'report';
     setStatus('saving');
+    setExportMsg('Starting export...');
     try {
-      await exportToPDF(canvas, docTitle);
+      await exportToPDF(canvas, docTitle, msg => setExportMsg(msg));
       setStatus('saved');
+      setExportMsg('');
     } catch (e) {
       console.error('PDF export error:', e);
       setError('PDF export failed: ' + e.message);
       setStatus('error');
+      setExportMsg('');
     }
   }, [activeDocId]);
 
@@ -286,11 +318,19 @@ function App() {
         </header>
         <section className="canvas-area">
           ${error ? html`<div className="error-banner">${error}</div>` : null}
-          ${documentContent
-            ? html`<${DocumentEditor} key=${editorKeyRef.current}
-                initialContent=${documentContent} onEditorReady=${setEditor}
-                onContentChange=${handleContentChange} placeholderText=${t('editorPlaceholder')} />`
-            : html`<div className="canvas-loading">Loading...</div>`}
+          ${exportMsg ? html`<div className="export-progress">${exportMsg}</div>` : null}
+          <div className="page-container">
+            ${documentContent
+              ? html`<${DocumentEditor} key=${editorKeyRef.current}
+                  initialContent=${documentContent} onEditorReady=${setEditor}
+                  onContentChange=${handleContentChange} placeholderText=${t('editorPlaceholder')} />`
+              : html`<div className="canvas-loading">Loading...</div>`}
+            ${pageBreaks.map((y, i) => html`
+              <div key=${i} className="page-break-line" style=${{ top: y + 'px' }}>
+                <span className="page-break-badge">Page ${i + 2}</span>
+              </div>
+            `)}
+          </div>
         </section>
       </div>
 
