@@ -90,7 +90,7 @@ export function WidgetPicker({ onSelect, onClose, onSwitchManual }) {
           </div>
           <div className="picker-body">
             ${loading ? html`<div className="picker-loading">${t('loadingDashboards')}</div>` : null}
-            ${error ? html`<div className="error-banner">${t('apiError')}</div>` : null}
+            ${error ? html`<div className="error-banner">${t('apiError')}<br/><small>${error}</small></div>` : null}
             ${!loading && !error && dashboards.length === 0 ? html`<div className="picker-empty">${t('noDashboards')}</div>` : null}
             ${!loading && dashboards.length > 0 ? html`
               <div className="picker-list">

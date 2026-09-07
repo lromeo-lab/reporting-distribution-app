@@ -30,7 +30,11 @@ export async function saveDocument(documentId = 'default', content) {
 
 export async function fetchDashboards() {
   const response = await fetch('/api/proxy/dashboards');
-  if (!response.ok) throw new Error(`Dashboard list failed: ${response.status}`);
+  if (!response.ok) {
+    let detail = `status ${response.status}`;
+    try { const body = await response.json(); detail = body.error || detail; } catch (_) {}
+    throw new Error(detail);
+  }
   return response.json();
 }
 

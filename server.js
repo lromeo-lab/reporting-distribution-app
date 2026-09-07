@@ -10,10 +10,30 @@ const publicDir = path.join(rootDir, 'public');
 const dataDir = path.join(rootDir, 'data');
 const defaultDocumentId = 'default';
 
-// --------------- Databricks OAuth M2M ---------------
-const databricksHost = (process.env.DATABRICKS_HOST || '').replace(/\/+$/, '');
+// --------------- Databricks Auth ---------------
+function resolveDatabricksHost() {
+  let host = process.env.DATABRICKS_HOST || '';
+  if (!host) {
+    const hostname = process.env.DATABRICKS_SERVER_HOSTNAME || '';
+    if (hostname) host = hostname;
+  }
+  if (host && !host.startsWith('http')) {
+    host = `https://${host}`;
+  }
+  return host.replace(/\/+$/, '');
+}
+
+const databricksHost = resolveDatabricksHost();
 const databricksClientId = process.env.DATABRICKS_CLIENT_ID || '';
 const databricksClientSecret = process.env.DATABRICKS_CLIENT_SECRET || '';
+const databricksDirectToken = process.env.DATABRICKS_TOKEN || '';
+
+console.log('[auth] DATABRICKS_HOST env:', process.env.DATABRICKS_HOST ? 'set' : 'NOT SET');
+console.log('[auth] DATABRICKS_SERVER_HOSTNAME env:', process.env.DATABRICKS_SERVER_HOSTNAME ? 'set' : 'NOT SET');
+console.log('[auth] Resolved host:', databricksHost || '(empty)');
+console.log('[auth] CLIENT_ID:', databricksClientId ? 'set' : 'NOT SET');
+console.log('[auth] CLIENT_SECRET:', databricksClientSecret ? 'set' : 'NOT SET');
+console.log('[auth] DATABRICKS_TOKEN:', databricksDirectToken ? 'set' : 'NOT SET');
 
 let cachedToken = null;
 let tokenExpiresAt = 0;
@@ -49,33 +69,50 @@ function httpsRequest(url, options, body) {
 }
 
 async function getAccessToken() {
+  // Priority 1: direct token from env
+  if (databricksDirectToken) {
+    return databricksDirectToken;
+  }
+
+  // Priority 2: cached OAuth token
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) {
     return cachedToken;
   }
-  if (!databricksHost || !databricksClientId || !databricksClientSecret) {
-    throw new Error('Missing Databricks OAuth credentials');
+
+  // Priority 3: OAuth M2M flow
+  if (!databricksHost) {
+    throw new Error('No DATABRICKS_HOST or DATABRICKS_SERVER_HOSTNAME env var set');
   }
+  if (!databricksClientId || !databricksClientSecret) {
+    throw new Error('No DATABRICKS_CLIENT_ID / DATABRICKS_CLIENT_SECRET env vars (and no DATABRICKS_TOKEN)');
+  }
+
   const tokenUrl = `${databricksHost}/oidc/v1/token`;
+  console.log('[auth] Requesting OAuth token from:', tokenUrl);
   const payload = `grant_type=client_credentials&client_id=${encodeURIComponent(databricksClientId)}&client_secret=${encodeURIComponent(databricksClientSecret)}&scope=all-apis`;
   const resp = await httpsRequest(tokenUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   }, payload);
+  console.log('[auth] Token response status:', resp.statusCode);
   if (resp.statusCode !== 200) {
-    throw new Error(`OAuth token error ${resp.statusCode}: ${resp.body}`);
+    throw new Error(`OAuth token error ${resp.statusCode}: ${resp.body.slice(0, 300)}`);
   }
   const parsed = JSON.parse(resp.body);
   cachedToken = parsed.access_token;
   tokenExpiresAt = Date.now() + (parsed.expires_in || 3600) * 1000;
+  console.log('[auth] OAuth token acquired, expires in', parsed.expires_in, 's');
   return cachedToken;
 }
 
 async function databricksApiGet(apiPath) {
   const token = await getAccessToken();
   const url = `${databricksHost}${apiPath}`;
+  console.log('[api] GET', url);
   const resp = await httpsRequest(url, {
     headers: { Authorization: `Bearer ${token}` },
   });
+  console.log('[api] Response status:', resp.statusCode);
   if (resp.statusCode !== 200) {
     throw new Error(`Databricks API ${resp.statusCode}: ${resp.body.slice(0, 500)}`);
   }
@@ -265,7 +302,15 @@ async function handleApi(req, res, url) {
     sendJson(res, 200, {
       host: databricksHost,
       workspaceId: extractWorkspaceId(databricksHost),
-      hasCredentials: !!(databricksClientId && databricksClientSecret),
+      hasClientCredentials: !!(databricksClientId && databricksClientSecret),
+      hasDirectToken: !!databricksDirectToken,
+      envDiag: {
+        DATABRICKS_HOST: process.env.DATABRICKS_HOST ? 'set' : 'NOT SET',
+        DATABRICKS_SERVER_HOSTNAME: process.env.DATABRICKS_SERVER_HOSTNAME ? 'set' : 'NOT SET',
+        DATABRICKS_CLIENT_ID: databricksClientId ? 'set' : 'NOT SET',
+        DATABRICKS_CLIENT_SECRET: databricksClientSecret ? 'set' : 'NOT SET',
+        DATABRICKS_TOKEN: databricksDirectToken ? 'set' : 'NOT SET',
+      },
     });
     return true;
   }
