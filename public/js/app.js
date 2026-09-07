@@ -3,23 +3,25 @@ import { createRoot } from 'react-dom/client';
 import htm from 'htm';
 import { Toolbar } from './components/Toolbar.js';
 import { DocumentEditor } from './components/DocumentEditor.js';
+import { WidgetPicker } from './components/WidgetPicker.js';
 import { DASHBOARD_WIDGETS, createSeedDocument } from './components/WidgetExtension.js';
 import { loadDocument, saveDocument } from './utils/api.js';
+import { I18nProvider, useI18n } from './utils/i18n.js';
 
 const html = htm.bind(React.createElement);
 const DOCUMENT_ID = 'default';
 
-function getStatusMeta(status, savedAt) {
+function getStatusMeta(status, savedAt, t) {
   if (status === 'saving') {
-    return { label: 'Guardando…', className: 'status-pill saving' };
+    return { label: t('saving'), className: 'status-pill saving' };
   }
 
   if (status === 'error') {
-    return { label: 'Error al guardar', className: 'status-pill' };
+    return { label: t('saveError'), className: 'status-pill' };
   }
 
   if (status === 'dirty') {
-    return { label: 'Cambios sin guardar', className: 'status-pill' };
+    return { label: t('unsaved'), className: 'status-pill' };
   }
 
   if (savedAt) {
@@ -27,70 +29,56 @@ function getStatusMeta(status, savedAt) {
       hour: '2-digit',
       minute: '2-digit',
     });
-    return { label: `Guardado ${time}`, className: 'status-pill saved' };
+    return { label: t('savedAt', { time }), className: 'status-pill saved' };
   }
 
-  return { label: 'Listo', className: 'status-pill saved' };
+  return { label: t('ready'), className: 'status-pill saved' };
 }
 
-function WidgetModal({ formState, onChange, onClose, onSubmit }) {
+function ManualWidgetModal({ formState, onChange, onClose, onSubmit, onSwitchBrowse }) {
+  const { t } = useI18n();
   return html`
     <div className="modal-backdrop" onClick=${onClose}>
       <div className="modal-card" onClick=${event => event.stopPropagation()}>
-        <h3>Insertar widget de dashboard</h3>
-        <p>
-          Pega exactamente una URL de embed Databricks como las que ya usa la app:
-          <code>/embed/dashboardsv3/...&fullscreenWidget=...</code>
-        </p>
+        <h3>${t('insertManual')}</h3>
+        <p>${t('formHint')}</p>
 
         <div className="form-grid">
           <label>
-            Título
+            ${t('widgetTitle')}
             <input
               type="text"
               value=${formState.title}
               onInput=${event => onChange('title', event.target.value)}
-              placeholder="Ej. Tendencia Temporal de Ingresos"
+              placeholder="e.g. Revenue Trend"
             />
           </label>
-
           <label>
-            URL del widget
+            ${t('widgetEmbedUrl')}
             <textarea
               value=${formState.src}
               onInput=${event => onChange('src', event.target.value)}
               placeholder="https://.../embed/dashboardsv3/...&fullscreenWidget=..."
             ></textarea>
           </label>
-
           <label>
-            Caption
+            ${t('caption')}
             <textarea
               value=${formState.caption}
               onInput=${event => onChange('caption', event.target.value)}
-              placeholder="Texto contextual opcional debajo del widget"
             ></textarea>
           </label>
-
           <label>
-            Altura en px
-            <input
-              type="number"
-              min="280"
-              max="1200"
-              value=${formState.height}
-              onInput=${event => onChange('height', event.target.value)}
-            />
+            ${t('heightPx')}
+            <input type="number" min="280" max="1200" value=${formState.height}
+              onInput=${event => onChange('height', event.target.value)} />
           </label>
-        </div>
-
-        <div className="form-hint">
-          Usa la biblioteca lateral para insertar rápidamente los widgets ya definidos en el reporte actual.
         </div>
 
         <div className="modal-actions">
-          <button type="button" onClick=${onClose}>Cancelar</button>
-          <button type="button" className="confirm" onClick=${onSubmit}>Insertar widget</button>
+          <button type="button" onClick=${onSwitchBrowse}>${t('browseDashboards')}</button>
+          <button type="button" onClick=${onClose}>${t('cancel')}</button>
+          <button type="button" className="confirm" onClick=${onSubmit}>${t('insert')}</button>
         </div>
       </div>
     </div>
@@ -103,7 +91,7 @@ function App() {
   const [status, setStatus] = useState('loading');
   const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState(null); // null | 'picker' | 'manual'
   const [widgetForm, setWidgetForm] = useState({
     title: '',
     src: '',
@@ -114,7 +102,8 @@ function App() {
   const hasLoadedRef = useRef(false);
   const dirtyRef = useRef(false);
 
-  const statusMeta = useMemo(() => getStatusMeta(status, savedAt), [status, savedAt]);
+  const { t, locale, setLocale, locales } = useI18n();
+  const statusMeta = useMemo(() => getStatusMeta(status, savedAt, t), [status, savedAt, t]);
 
   const persist = useCallback(async () => {
     if (!latestContentRef.current) {
@@ -132,7 +121,7 @@ function App() {
     } catch (saveError) {
       console.error(saveError);
       setStatus('error');
-      setError('No se pudo guardar el documento en el backend Node.');
+      setError(t('backendError'));
     }
   }, []);
 
@@ -140,7 +129,7 @@ function App() {
     async function bootstrap() {
       try {
         const stored = await loadDocument(DOCUMENT_ID);
-        const nextContent = stored?.content || createSeedDocument();
+        const nextContent = stored?.content || createSeedDocument(t);
         latestContentRef.current = nextContent;
         setDocumentContent(nextContent);
         setSavedAt(stored?.updatedAt || null);
@@ -152,11 +141,11 @@ function App() {
         }
       } catch (loadError) {
         console.error(loadError);
-        const fallback = createSeedDocument();
+        const fallback = createSeedDocument(t);
         latestContentRef.current = fallback;
         setDocumentContent(fallback);
         setStatus('dirty');
-        setError('Se cargó una versión local inicial porque el documento remoto aún no existe.');
+        setError(t('loadFallback'));
       } finally {
         hasLoadedRef.current = true;
       }
@@ -222,18 +211,23 @@ function App() {
 
   const handleSubmitWidget = useCallback(() => {
     if (!widgetForm.src.includes('/embed/dashboardsv3/')) {
-      setError('La URL debe ser un embed de dashboard Databricks.');
+      setError(t('invalidUrl'));
       return;
     }
 
     insertWidget(widgetForm);
-    setIsModalOpen(false);
+    setModalMode(null);
     resetWidgetForm();
     setError('');
   }, [insertWidget, resetWidgetForm, widgetForm]);
 
+  const handlePickerSelect = useCallback(widget => {
+    insertWidget(widget);
+    setModalMode(null);
+  }, [insertWidget]);
+
   const handleResetDocument = useCallback(() => {
-    const nextContent = createSeedDocument();
+    const nextContent = createSeedDocument(t);
     latestContentRef.current = nextContent;
     setDocumentContent(nextContent);
     dirtyRef.current = true;
@@ -245,34 +239,35 @@ function App() {
     <div className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark">B</div>
+          <div className="brand-mark">AI</div>
           <div className="brand-copy">
-            <h1>Bakehouse Report Studio</h1>
-            <p>Editor narrativo con widgets embebidos de Databricks dashboards</p>
+            <h1>${t('appName')}</h1>
+            <p>${t('appTagline')}</p>
           </div>
         </div>
 
         <div className="topbar-actions">
+          <select className="lang-select" value=${locale} onChange=${e => setLocale(e.target.value)}>
+            ${locales.map(l => html`<option key=${l} value=${l}>${l.toUpperCase()}</option>`)}
+          </select>
           <span className=${statusMeta.className}>${statusMeta.label}</span>
-          <button className="secondary-button" type="button" onClick=${handleResetDocument}>Restaurar demo</button>
-          <button className="primary-button" type="button" onClick=${persist}>Guardar ahora</button>
+          <button className="secondary-button" type="button" onClick=${handleResetDocument}>${t('restoreDemo')}</button>
+          <button className="primary-button" type="button" onClick=${persist}>${t('save')}</button>
         </div>
       </header>
 
       <main className="workspace">
         <aside className="sidebar">
           <section className="sidebar-panel">
-            <h2>Biblioteca de widgets</h2>
-            <p>
-              Inserta visualizaciones usando exactamente el mismo patrón de embed que tenía la aplicación original.
-            </p>
+            <h2>${t('widgetLibrary')}</h2>
+            <p>${t('widgetLibraryDesc')}</p>
             <div className="library-list">
               ${DASHBOARD_WIDGETS.map(
                 widget => html`
                   <div className="library-card" key=${widget.key}>
                     <h4>${widget.title}</h4>
                     <p>${widget.caption}</p>
-                    <button type="button" onClick=${() => handleInsertFromLibrary(widget)}>Añadir al documento</button>
+                    <button type="button" onClick=${() => handleInsertFromLibrary(widget)}>${t('addToDoc')}</button>
                   </div>
                 `,
               )}
@@ -280,19 +275,14 @@ function App() {
           </section>
 
           <section className="sidebar-panel">
-            <h3>Modo de trabajo</h3>
-            <p>
-              Escribe libremente en el documento central y coloca el cursor donde quieras insertar un widget.
-              Si necesitas otro embed, usa el botón “Insertar widget” y pega la URL del iframe de Databricks.
-            </p>
-            <div className="empty-state">
-              El documento se guarda automáticamente cada 3 segundos cuando detecta cambios.
-            </div>
+            <h3>${t('workflow')}</h3>
+            <p>${t('workflowDesc')}</p>
+            <div className="empty-state">${t('autosaveNote')}</div>
           </section>
         </aside>
 
         <section className="editor-panel">
-          <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setIsModalOpen(true)} />
+          <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} />
           ${error ? html`<div className="error-banner">${error}</div>` : null}
           ${documentContent
             ? html`
@@ -300,22 +290,33 @@ function App() {
                   initialContent=${documentContent}
                   onEditorReady=${setEditor}
                   onContentChange=${handleContentChange}
+                  placeholderText=${t('editorPlaceholder')}
                 />
               `
-            : html`<div className="editor-body"><div className="editor-canvas"><p>Cargando documento…</p></div></div>`}
+            : html`<div className="editor-body"><div className="editor-canvas"><p>Loading…</p></div></div>`}
         </section>
       </main>
 
-      ${isModalOpen
+      ${modalMode === 'picker'
         ? html`
-            <${WidgetModal}
+            <${WidgetPicker}
+              onSelect=${handlePickerSelect}
+              onClose=${() => setModalMode(null)}
+              onSwitchManual=${() => setModalMode('manual')}
+            />
+          `
+        : null}
+      ${modalMode === 'manual'
+        ? html`
+            <${ManualWidgetModal}
               formState=${widgetForm}
               onChange=${handleWidgetFormChange}
               onClose=${() => {
-                setIsModalOpen(false);
+                setModalMode(null);
                 resetWidgetForm();
               }}
               onSubmit=${handleSubmitWidget}
+              onSwitchBrowse=${() => setModalMode('picker')}
             />
           `
         : null}
@@ -323,5 +324,9 @@ function App() {
   `;
 }
 
+function Root() {
+  return html`<${I18nProvider}><${App} /><//>`;
+}
+
 const root = createRoot(document.getElementById('root'));
-root.render(html`<${App} />`);
+root.render(html`<${Root} />`);

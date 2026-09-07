@@ -522,6 +522,183 @@ button {
   border: none;
 }
 
+/* ── Language selector ── */
+.lang-select {
+  padding: 6px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--slate-700);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* ── Widget Picker ── */
+.picker-modal {
+  width: min(100%, 780px);
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.picker-header {
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--gray-200);
+  margin-bottom: 16px;
+}
+
+.picker-header h3 {
+  margin: 0 0 4px;
+}
+
+.picker-header p {
+  margin: 0;
+  color: var(--slate-600);
+  font-size: 0.88rem;
+}
+
+.picker-back {
+  background: none;
+  border: none;
+  color: var(--teal);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.84rem;
+  padding: 0;
+  margin-bottom: 8px;
+}
+
+.picker-body {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+}
+
+.picker-loading,
+.picker-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--slate-600);
+  font-size: 0.92rem;
+}
+
+.picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.picker-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.picker-item:hover {
+  border-color: var(--teal);
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+}
+
+.picker-item-icon {
+  font-size: 1.6rem;
+  flex-shrink: 0;
+}
+
+.picker-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-item-info strong {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--slate-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.picker-item-info span {
+  display: block;
+  font-size: 0.76rem;
+  color: var(--slate-500);
+  margin-top: 2px;
+}
+
+.picker-item-arrow {
+  font-size: 1.4rem;
+  color: var(--slate-400);
+  font-weight: bold;
+}
+
+.picker-page-group {
+  margin-bottom: 20px;
+}
+
+.picker-page-label {
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--slate-500);
+  margin-bottom: 10px;
+}
+
+.picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+.picker-widget-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.picker-widget-card:hover {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+
+.picker-widget-icon {
+  font-size: 1.5rem;
+  flex-shrink: 0;
+}
+
+.picker-widget-info {
+  min-width: 0;
+}
+
+.picker-widget-info strong {
+  display: block;
+  font-size: 0.84rem;
+  color: var(--slate-900);
+}
+
+.picker-widget-info span {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--slate-500);
+  margin-top: 2px;
+}
+
 @media (max-width: 1080px) {
   .workspace {
     grid-template-columns: 1fr;

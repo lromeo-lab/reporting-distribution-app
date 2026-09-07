@@ -7,7 +7,7 @@ import { DatabricksWidget } from './WidgetExtension.js';
 
 const html = htm.bind(React.createElement);
 
-export function DocumentEditor({ initialContent, onEditorReady, onContentChange }) {
+export function DocumentEditor({ initialContent, onEditorReady, onContentChange, placeholderText }) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -16,7 +16,7 @@ export function DocumentEditor({ initialContent, onEditorReady, onContentChange 
         },
       }),
       Placeholder.configure({
-        placeholder: 'Comienza a escribir tu reporte. Inserta widgets del dashboard desde la barra o la biblioteca lateral.',
+        placeholder: placeholderText || 'Start writing your report...',
       }),
       DatabricksWidget,
     ],

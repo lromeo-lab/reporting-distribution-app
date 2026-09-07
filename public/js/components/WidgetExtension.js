@@ -48,97 +48,64 @@ export function createWidgetBlock(widget) {
   };
 }
 
-export function createSeedDocument() {
+export function createSeedDocument(t) {
+  const txt = key => t ? t(key) : key;
   return {
     type: 'doc',
     content: [
       {
         type: 'heading',
         attrs: { level: 1 },
-        content: [{ type: 'text', text: 'De la Masa al Margen de Ganancia' }],
+        content: [{ type: 'text', text: txt('seedTitle') }],
       },
       {
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'Este documento combina narrativa ejecutiva con widgets vivos del dashboard de Bakehouse. Puedes escribir texto libre, reorganizar bloques y añadir visualizaciones directamente en el flujo del reporte.',
-          },
-        ],
+        content: [{ type: 'text', text: txt('seedIntro') }],
       },
       {
         type: 'heading',
         attrs: { level: 2 },
-        content: [{ type: 'text', text: 'Capítulo I · Huella geográfica y distribución de ingresos' }],
+        content: [{ type: 'text', text: txt('seedCh1Title') }],
       },
       {
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'La operación de Bakehouse se extiende a través de múltiples continentes. La distribución espacial de las franquicias permite detectar focos de alto rendimiento y priorizar zonas de expansión estratégica con contexto visual inmediato.',
-          },
-        ],
+        content: [{ type: 'text', text: txt('seedCh1Body') }],
       },
       createWidgetBlock(DASHBOARD_WIDGETS[0]),
-      {
-        type: 'horizontalRule',
-      },
+      { type: 'horizontalRule' },
       {
         type: 'heading',
         attrs: { level: 2 },
-        content: [{ type: 'text', text: 'Capítulo II · Dinámica temporal y velocidad del negocio' }],
+        content: [{ type: 'text', text: txt('seedCh2Title') }],
       },
       {
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'El análisis temporal revela el pulso operativo de la franquicia. La comparación entre granularidad diaria y promedios rodantes permite separar efectos estacionales de cambios estructurales en la demanda.',
-          },
-        ],
+        content: [{ type: 'text', text: txt('seedCh2Body') }],
       },
       {
         type: 'blockquote',
         content: [
           {
             type: 'paragraph',
-            content: [
-              {
-                type: 'text',
-                text: 'El indicador day-over-day funciona como una métrica de velocidad. Valores persistentemente superiores al 5% suelen indicar picos de demanda que requieren atención operativa inmediata.',
-              },
-            ],
+            content: [{ type: 'text', text: txt('seedCh2Quote') }],
           },
         ],
       },
       createWidgetBlock(DASHBOARD_WIDGETS[1]),
-      {
-        type: 'horizontalRule',
-      },
+      { type: 'horizontalRule' },
       {
         type: 'heading',
         attrs: { level: 2 },
-        content: [{ type: 'text', text: 'Capítulo III · Segmentación por formato' }],
+        content: [{ type: 'text', text: txt('seedCh3Title') }],
       },
       {
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'La diversidad de formatos de tienda responde a condiciones locales distintas. Integrar estos widgets dentro del texto permite documentar hipótesis, explicar decisiones y dejar el reporte listo para consumo ejecutivo.',
-          },
-        ],
+        content: [{ type: 'text', text: txt('seedCh3Body') }],
       },
       createWidgetBlock(DASHBOARD_WIDGETS[2]),
       {
         type: 'paragraph',
-        content: [
-          {
-            type: 'text',
-            text: 'Usa la barra superior o la biblioteca lateral para insertar más widgets del dashboard con exactamente el mismo patrón de embed que ya existe en la aplicación.',
-          },
-        ],
+        content: [{ type: 'text', text: txt('seedOutro') }],
       },
     ],
   };
@@ -171,12 +138,12 @@ function WidgetNodeView(props) {
       <div className="widget-node-header" contentEditable=${false}>
         <div>
           <strong>${title || 'Databricks widget'}</strong>
-          <span>Embed conservando el mismo formato del dashboard existente</span>
+          <span>Embed preserving the same format as the existing dashboard</span>
         </div>
         <div className="widget-node-actions">
-          <a href=${src} target="_blank" rel="noreferrer">Abrir</a>
-          <button type="button" onClick=${onEdit}>Editar</button>
-          <button type="button" onClick=${deleteNode}>Quitar</button>
+          <a href=${src} target="_blank" rel="noreferrer">Open</a>
+          <button type="button" onClick=${onEdit}>Edit</button>
+          <button type="button" onClick=${deleteNode}>Remove</button>
         </div>
       </div>
       <iframe

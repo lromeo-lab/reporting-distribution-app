@@ -1,4 +1,5 @@
 const http = require('http');
+const https = require('https');
 const fsp = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
@@ -8,6 +9,98 @@ const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
 const dataDir = path.join(rootDir, 'data');
 const defaultDocumentId = 'default';
+
+// --------------- Databricks OAuth M2M ---------------
+const databricksHost = (process.env.DATABRICKS_HOST || '').replace(/\/+$/, '');
+const databricksClientId = process.env.DATABRICKS_CLIENT_ID || '';
+const databricksClientSecret = process.env.DATABRICKS_CLIENT_SECRET || '';
+
+let cachedToken = null;
+let tokenExpiresAt = 0;
+
+function extractWorkspaceId(host) {
+  try {
+    const hostname = new URL(host).hostname;
+    const first = hostname.split('.')[0];
+    if (/^\d+$/.test(first)) return first;
+  } catch (_) { /* ignore */ }
+  return '';
+}
+
+function httpsRequest(url, options, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const opts = {
+      hostname: parsed.hostname,
+      port: parsed.port || 443,
+      path: parsed.pathname + parsed.search,
+      method: options.method || 'GET',
+      headers: options.headers || {},
+    };
+    const req = https.request(opts, res => {
+      let data = '';
+      res.on('data', chunk => { data += chunk; });
+      res.on('end', () => resolve({ statusCode: res.statusCode, headers: res.headers, body: data }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function getAccessToken() {
+  if (cachedToken && Date.now() < tokenExpiresAt - 60_000) {
+    return cachedToken;
+  }
+  if (!databricksHost || !databricksClientId || !databricksClientSecret) {
+    throw new Error('Missing Databricks OAuth credentials');
+  }
+  const tokenUrl = `${databricksHost}/oidc/v1/token`;
+  const payload = `grant_type=client_credentials&client_id=${encodeURIComponent(databricksClientId)}&client_secret=${encodeURIComponent(databricksClientSecret)}&scope=all-apis`;
+  const resp = await httpsRequest(tokenUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+  }, payload);
+  if (resp.statusCode !== 200) {
+    throw new Error(`OAuth token error ${resp.statusCode}: ${resp.body}`);
+  }
+  const parsed = JSON.parse(resp.body);
+  cachedToken = parsed.access_token;
+  tokenExpiresAt = Date.now() + (parsed.expires_in || 3600) * 1000;
+  return cachedToken;
+}
+
+async function databricksApiGet(apiPath) {
+  const token = await getAccessToken();
+  const url = `${databricksHost}${apiPath}`;
+  const resp = await httpsRequest(url, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (resp.statusCode !== 200) {
+    throw new Error(`Databricks API ${resp.statusCode}: ${resp.body.slice(0, 500)}`);
+  }
+  return JSON.parse(resp.body);
+}
+
+function parseWidgetsFromDashboard(dashboardId, raw) {
+  const config = typeof raw.serialized_dashboard === 'string'
+    ? JSON.parse(raw.serialized_dashboard)
+    : raw.serialized_dashboard || {};
+  const workspaceId = extractWorkspaceId(databricksHost);
+  const pages = (config.pages || []).map(page => {
+    const widgets = (page.layout || []).map(item => {
+      const w = item.widget || {};
+      const spec = w.spec || {};
+      const frame = spec.frame || {};
+      const title = frame.title?.value || w.name || 'Untitled';
+      const widgetType = spec.widgetType || 'unknown';
+      const embedUrl = `${databricksHost}/embed/dashboardsv3/${dashboardId}?o=${workspaceId}&fullscreenWidget=${page.name}~${w.name}`;
+      return { name: w.name, title, widgetType, embedUrl, position: item.position };
+    }).filter(w => w.name);
+    return { name: page.name, displayName: page.displayName || page.name, widgets };
+  });
+  return { dashboardId, displayName: raw.display_name, pages };
+}
 
 const mimeTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -128,6 +221,52 @@ async function handleApi(req, res, url) {
 
   if (req.method === 'GET' && url.pathname === '/api/health') {
     sendJson(res, 200, { ok: true, service: 'reporting-distribution-app', runtime: 'node' });
+    return true;
+  }
+
+  // --------------- Dashboard proxy ---------------
+  if (req.method === 'GET' && url.pathname === '/api/proxy/dashboards') {
+    try {
+      const pageSize = url.searchParams.get('page_size') || '50';
+      const pageToken = url.searchParams.get('page_token') || '';
+      let apiPath = `/api/2.0/lakeview/dashboards?page_size=${pageSize}`;
+      if (pageToken) apiPath += `&page_token=${encodeURIComponent(pageToken)}`;
+      const data = await databricksApiGet(apiPath);
+      const dashboards = (data.dashboards || []).filter(d => d.lifecycle_state === 'ACTIVE').map(d => ({
+        id: d.dashboard_id,
+        name: d.display_name,
+        path: d.parent_path,
+        updatedAt: d.update_time,
+      }));
+      sendJson(res, 200, { dashboards, nextPageToken: data.next_page_token || null });
+      return true;
+    } catch (err) {
+      console.error('Dashboard list error:', err.message);
+      sendJson(res, 502, { error: err.message });
+      return true;
+    }
+  }
+
+  if (req.method === 'GET' && url.pathname.match(/^\/api\/proxy\/dashboards\/[^/]+\/widgets$/)) {
+    try {
+      const dashId = url.pathname.split('/')[4];
+      const raw = await databricksApiGet(`/api/2.0/lakeview/dashboards/${dashId}`);
+      const result = parseWidgetsFromDashboard(dashId, raw);
+      sendJson(res, 200, result);
+      return true;
+    } catch (err) {
+      console.error('Widget list error:', err.message);
+      sendJson(res, 502, { error: err.message });
+      return true;
+    }
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/proxy/config') {
+    sendJson(res, 200, {
+      host: databricksHost,
+      workspaceId: extractWorkspaceId(databricksHost),
+      hasCredentials: !!(databricksClientId && databricksClientSecret),
+    });
     return true;
   }
 
