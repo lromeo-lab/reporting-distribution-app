@@ -1,127 +1,126 @@
 /**
  * Export utilities for AI/BI Report Studio
- * Converts editor content to PDF, DOCX, PPTX formats.
+ * Uses jsPDF + html2canvas directly (no wrapper — reliable ESM imports).
  */
 
-// ── PDF Export (html2pdf.js) ───────────────────────────────────
+const A4_W_MM = 210;
+const A4_H_MM = 297;
+const MARGIN   = 15;  // mm
+const CONTENT_W = A4_W_MM - MARGIN * 2;  // 180mm usable
+const CONTENT_H = A4_H_MM - MARGIN * 2;  // 267mm usable
 
 /**
- * Export the editor content as a PDF document.
+ * Export the editor canvas as an A4 PDF.
  *
- * Strategy:
- *  1. Clone the editor canvas DOM so the original is untouched
- *  2. In the clone, replace iframes (dashboard widgets) with styled placeholders
- *  3. Run html2pdf.js on the clone (A4, margins, page-break-aware)
- *  4. Trigger download
- *
- * @param {HTMLElement} canvasEl  – the .editor-canvas element
- * @param {string}      title    – document title for filename + header
- * @param {object}      opts     – optional overrides
+ * Flow:
+ *  1. Clone the editor DOM (original untouched)
+ *  2. Replace iframes with styled placeholders
+ *  3. Render clone to canvas via html2canvas
+ *  4. Slice the canvas into A4 pages
+ *  5. Write each page into a jsPDF document
+ *  6. Trigger download
  */
 export async function exportToPDF(canvasEl, title, opts = {}) {
   if (!canvasEl) throw new Error('No editor canvas element provided');
 
-  // html2pdf.js is a CJS module; esm.sh wraps it — the callable may be
-  // at .default, .default.default, or at the module root depending on the wrapper.
-  const mod = await import('html2pdf.js');
-  const html2pdf = typeof mod.default === 'function' ? mod.default
-    : typeof mod.default?.default === 'function' ? mod.default.default
-    : mod;
-  if (typeof html2pdf !== 'function') {
-    throw new Error('html2pdf loaded but is not callable: ' + typeof html2pdf);
-  }
+  // Dynamic imports — these are proper ESM on esm.sh
+  const [{ default: jsPDF }, html2canvasMod] = await Promise.all([
+    import('jspdf'),
+    import('html2canvas'),
+  ]);
+  const html2canvas = html2canvasMod.default || html2canvasMod;
 
-  // 1. Deep-clone the canvas so we can mutate freely
+  // 1. Clone & style for A4-width rendering
   const clone = canvasEl.cloneNode(true);
-  clone.style.width = '210mm';      // A4 width
-  clone.style.padding = '0';
-  clone.style.border = 'none';
-  clone.style.boxShadow = 'none';
-  clone.style.borderRadius = '0';
-  clone.style.background = '#ffffff';
+  const renderW = 794;  // A4 at 96 dpi
+  Object.assign(clone.style, {
+    position: 'fixed', left: '-9999px', top: '0',
+    width: renderW + 'px',
+    padding: '40px 48px',
+    border: 'none', boxShadow: 'none', borderRadius: '0',
+    background: '#ffffff',
+  });
 
-  // 2. Replace iframes with placeholders
-  const iframes = clone.querySelectorAll('.widget-wrap');
-  iframes.forEach(wrap => {
+  // 2. Replace widget iframes with placeholders
+  clone.querySelectorAll('.widget-wrap').forEach(wrap => {
     const titleEl = wrap.querySelector('.widget-toolbar-title');
     const widgetTitle = titleEl?.textContent || 'Dashboard Widget';
-    const iframe = wrap.querySelector('iframe');
-    const src = iframe?.src || '';
-
     const placeholder = document.createElement('div');
-    placeholder.style.cssText = `
-      border: 2px dashed #cbd5e1;
-      border-radius: 12px;
-      padding: 32px 24px;
-      text-align: center;
-      background: #f8fafc;
-      margin: 16px 0;
-      page-break-inside: avoid;
-    `;
-    placeholder.innerHTML = `
-      <div style="font-size: 14px; font-weight: 700; color: #334155; margin-bottom: 8px;">
-        📊 ${widgetTitle}
-      </div>
-      <div style="font-size: 11px; color: #64748b;">
-        Interactive dashboard widget — view online
-      </div>
-      ${src ? `<div style="font-size: 10px; color: #94a3b8; margin-top: 6px; word-break: break-all;">${src.split('?')[0]}</div>` : ''}
-    `;
+    Object.assign(placeholder.style, {
+      border: '2px dashed #cbd5e1', borderRadius: '12px',
+      padding: '28px 20px', textAlign: 'center',
+      background: '#f8fafc', margin: '16px 0',
+    });
+    placeholder.innerHTML =
+      '<div style="font-size:14px;font-weight:700;color:#334155;margin-bottom:6px">' +
+      '\u{1F4CA} ' + widgetTitle + '</div>' +
+      '<div style="font-size:11px;color:#64748b">Interactive dashboard widget \u2014 view online</div>';
     wrap.replaceWith(placeholder);
   });
 
-  // 3. Remove any hover toolbars, resize bars etc. from clone
+  // Remove hover toolbars & resize bars from clone
   clone.querySelectorAll('.widget-toolbar, .widget-resize-bar').forEach(el => el.remove());
 
-  // 4. Add a title header to the clone
-  const header = document.createElement('div');
-  header.style.cssText = `
-    font-size: 10px; color: #94a3b8; margin-bottom: 16px;
-    padding-bottom: 8px; border-bottom: 1px solid #e2e8f0;
-    display: flex; justify-content: space-between;
-  `;
-  header.innerHTML = `
-    <span>AI/BI Report Studio</span>
-    <span>${new Date().toLocaleDateString()}</span>
-  `;
-  clone.insertBefore(header, clone.firstChild);
+  // 3. Insert a header
+  const hdr = document.createElement('div');
+  Object.assign(hdr.style, {
+    fontSize: '10px', color: '#94a3b8', marginBottom: '12px',
+    paddingBottom: '8px', borderBottom: '1px solid #e2e8f0',
+    display: 'flex', justifyContent: 'space-between',
+  });
+  hdr.innerHTML = '<span>AI/BI Report Studio</span><span>' + new Date().toLocaleDateString() + '</span>';
+  clone.insertBefore(hdr, clone.firstChild);
 
-  // 5. Append clone off-screen for rendering
-  clone.style.position = 'fixed';
-  clone.style.left = '-9999px';
-  clone.style.top = '0';
   document.body.appendChild(clone);
 
-  // 6. Generate PDF
-  const filename = (title || 'report').replace(/[^a-zA-Z0-9_\-\s]/g, '').replace(/\s+/g, '-').toLowerCase();
-
   try {
-    await html2pdf()
-      .set({
-        margin:       [15, 15, 20, 15],  // top, left, bottom, right (mm)
-        filename:     `${filename}.pdf`,
-        image:        { type: 'jpeg', quality: 0.95 },
-        html2canvas:  {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          scrollY: 0,
-          windowWidth: 794,  // A4 width in px at 96dpi
-        },
-        jsPDF:        {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-        },
-        pagebreak:    {
-          mode: ['avoid-all', 'css', 'legacy'],
-          before: '.pdf-page-break-before',
-          after:  '.pdf-page-break-after',
-          avoid:  ['.widget-wrap', 'blockquote', 'pre', 'table', 'h1', 'h2', 'h3', 'h4'],
-        },
-      })
-      .from(clone)
-      .save();
+    // 4. Render to canvas
+    const canvas = await html2canvas(clone, {
+      scale: 2,
+      useCORS: true,
+      letterRendering: true,
+      scrollY: 0,
+      width: renderW,
+      windowWidth: renderW,
+    });
+
+    // 5. Slice into pages
+    const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+    const imgW = CONTENT_W;
+    const imgH = (canvas.height * CONTENT_W) / canvas.width;  // proportional total height in mm
+    const pageH = CONTENT_H;
+    let yOffset = 0;
+    let page = 0;
+
+    while (yOffset < imgH) {
+      if (page > 0) pdf.addPage();
+
+      // Crop the source canvas for this page slice
+      const srcY = (yOffset / imgH) * canvas.height;
+      const srcH = Math.min((pageH / imgH) * canvas.height, canvas.height - srcY);
+      const sliceH = (srcH / canvas.height) * imgH;
+
+      // Create a temp canvas for this slice
+      const sliceCanvas = document.createElement('canvas');
+      sliceCanvas.width = canvas.width;
+      sliceCanvas.height = srcH;
+      const ctx = sliceCanvas.getContext('2d');
+      ctx.drawImage(canvas, 0, srcY, canvas.width, srcH, 0, 0, canvas.width, srcH);
+
+      const imgData = sliceCanvas.toDataURL('image/jpeg', 0.92);
+      pdf.addImage(imgData, 'JPEG', MARGIN, MARGIN, imgW, sliceH);
+
+      yOffset += pageH;
+      page++;
+    }
+
+    // 6. Download
+    const filename = (title || 'report')
+      .replace(/[^a-zA-Z0-9_\-\s]/g, '')
+      .replace(/\s+/g, '-')
+      .toLowerCase();
+    pdf.save(filename + '.pdf');
+
   } finally {
     document.body.removeChild(clone);
   }
@@ -130,17 +129,10 @@ export async function exportToPDF(canvasEl, title, opts = {}) {
 
 // ── Placeholder exports for future formats ─────────────────────
 
-export async function exportToDOCX(canvasEl, title, opts = {}) {
-  // TODO: Implement with `docx` library
+export async function exportToDOCX(_el, _title, _opts) {
   throw new Error('DOCX export coming soon');
 }
 
-export async function exportToPPTX(canvasEl, title, opts = {}) {
-  // TODO: Implement with `pptxgenjs` library
+export async function exportToPPTX(_el, _title, _opts) {
   throw new Error('PPTX export coming soon');
-}
-
-export async function exportToEmail(canvasEl, title, opts = {}) {
-  // TODO: Generate inline-styled HTML for email
-  throw new Error('Email export coming soon');
 }
