@@ -3,7 +3,13 @@ const https = require('https');
 const fsp = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
-const { Pool } = require('pg');
+let Pool;
+try {
+  Pool = require('pg').Pool;
+} catch (e) {
+  console.error('[db] Failed to load pg module:', e.message);
+  Pool = null;
+}
 
 const port = Number(process.env.DATABRICKS_APP_PORT || 8080);
 const rootDir = __dirname;
@@ -12,13 +18,14 @@ const defaultDocumentId = 'default';
 
 // --------------- Lakebase (Postgres) ---------------
 // PG* env vars are auto-injected by Databricks Apps when Lakebase resource is configured
-const pool = new Pool({
+const pool = Pool ? new Pool({
   ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
   max: 5,
   idleTimeoutMillis: 30000,
-});
+}) : null;
 
 async function initDatabase() {
+  if (!pool) throw new Error('No database pool available');
   console.log('[db] Connecting to Lakebase...');
   console.log('[db] PGHOST:', process.env.PGHOST || '(not set)');
   console.log('[db] PGDATABASE:', process.env.PGDATABASE || '(not set)');
@@ -221,7 +228,13 @@ const mimeTypes = {
 
 async function ensureDirectories() {
   await fsp.mkdir(publicDir, { recursive: true });
-  await initDatabase();
+  try {
+    if (pool) await initDatabase();
+    else console.warn('[db] Skipping database init (pg not available)');
+  } catch (err) {
+    console.error('[db] Database init failed:', err.message);
+    console.error('[db] App will run without persistence — documents will not be saved');
+  }
 }
 
 
@@ -283,6 +296,7 @@ async function handleApi(req, res, url) {
   const documentId = pathParts[2] || defaultDocumentId;
 
   // GET single document
+    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'GET' && url.pathname.startsWith('/api/documents/') && !url.pathname.endsWith('/rename')) {
     try {
       const { rows } = await pool.query('SELECT id, title, content, updated_at FROM documents WHERE id = $1', [documentId]);
@@ -298,6 +312,7 @@ async function handleApi(req, res, url) {
   }
 
   // Rename document
+    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'POST' && url.pathname.endsWith('/rename') && url.pathname.startsWith('/api/documents/')) {
     try {
       const docId = url.pathname.split('/')[3];
@@ -316,6 +331,7 @@ async function handleApi(req, res, url) {
   }
 
   // Save document (upsert)
+    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'POST' && url.pathname.startsWith('/api/documents/')) {
     try {
       const rawBody = await readRequestBody(req);
@@ -341,6 +357,7 @@ async function handleApi(req, res, url) {
   }
 
   // List documents
+    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'GET' && url.pathname === '/api/documents') {
     try {
       const { rows } = await pool.query('SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC');
@@ -354,6 +371,7 @@ async function handleApi(req, res, url) {
   }
 
   // Delete document
+    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'DELETE' && url.pathname.startsWith('/api/documents/')) {
     try {
       const { rowCount } = await pool.query('DELETE FROM documents WHERE id = $1', [documentId]);
