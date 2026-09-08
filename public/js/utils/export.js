@@ -38,6 +38,17 @@ export async function exportToPDF(canvasEl, title, onProgress) {
     background: '#fff',
   });
 
+  // Inject page-break rules so html2canvas respects content boundaries
+  const style = document.createElement('style');
+  style.textContent = `
+    h1, h2, h3, h4 { page-break-after: avoid; page-break-inside: avoid; }
+    p, li { orphans: 3; widows: 3; }
+    blockquote, pre, table { page-break-inside: avoid; }
+    .widget-wrap, .widget-container { page-break-inside: avoid; }
+    img { page-break-inside: avoid; }
+  `;
+  clone.appendChild(style);
+
   // Replace widget iframes → styled placeholders
   clone.querySelectorAll('.widget-wrap').forEach(wrap => {
     const t = wrap.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';

@@ -261,7 +261,7 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
   flex: 1; overflow-y: auto;
   display: flex; flex-direction: column; align-items: center;
   padding: 32px 20px 80px;
-  background: #e8ecf0;
+  background: #edf0f4;
 }
 .canvas-loading { padding: 60px; text-align: center; color: var(--slate-500); }
 
@@ -279,14 +279,8 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
 }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.55} }
 
-/* ── Page container (holds editor + page break overlays) ── */
-.page-container {
-  position: relative;
-  width: 100%; max-width: 800px;
-}
-
 /* ── Editor ── */
-.editor-body { width: 100%; }
+.editor-body { width: 100%; max-width: 800px; }
 .editor-canvas {
   padding: 56px 64px;
   background: var(--white);
@@ -296,33 +290,7 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
   min-height: 700px;
 }
 
-/* ── A4 Page breaks (grey gap between sheets) ── */
-.page-break-line {
-  position: absolute; left: 0; right: 0;
-  height: 40px;
-  pointer-events: none;
-  z-index: 6;
-  display: flex; align-items: center; justify-content: center;
-}
-.page-break-line::before {
-  content: '';
-  position: absolute; inset: 0;
-  background: #e8ecf0;
-  /* Top shadow (bottom of previous page) */
-  box-shadow:
-    inset 0  8px 8px -6px rgba(0,0,0,0.06),
-    inset 0 -8px 8px -6px rgba(0,0,0,0.06);
-}
-.page-break-badge {
-  position: relative; z-index: 1;
-  padding: 3px 12px;
-  background: #d1d8e0;
-  color: var(--slate-500);
-  font-size: 0.62rem; font-weight: 700;
-  border-radius: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+
 .editor-canvas .ProseMirror { outline: none; min-height: 600px; }
 .editor-canvas .ProseMirror > * + * { margin-top: 1em; }
 .editor-canvas .ProseMirror h1, .editor-canvas .ProseMirror h2,
