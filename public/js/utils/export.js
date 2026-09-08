@@ -96,32 +96,77 @@ table, figure         { break-inside: avoid; }
 `;
 
 /**
- * Extract clean HTML from the editor DOM, replacing widgets with placeholders.
+ * Try to capture a widget screenshot from the server.
+ * Returns a base64 data URL on success, null on failure.
  */
-function extractPrintHtml(canvasEl) {
+async function captureWidget(embedUrl) {
+  try {
+    const resp = await fetch('/api/proxy/widget-screenshot?url=' + encodeURIComponent(embedUrl));
+    if (!resp.ok) {
+      console.warn('[export] Screenshot HTTP', resp.status);
+      return null;
+    }
+    const blob = await resp.blob();
+    return await new Promise(resolve => {
+      const r = new FileReader();
+      r.onloadend = () => resolve(r.result);
+      r.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.warn('[export] Screenshot error:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Extract clean HTML from editor DOM.
+ * For each widget: try server screenshot, fallback to text placeholder.
+ */
+async function extractPrintHtml(canvasEl, onProgress) {
   const pm = canvasEl.querySelector('.ProseMirror');
   if (!pm) throw new Error('ProseMirror content not found');
 
   const clone = pm.cloneNode(true);
+  const wraps = clone.querySelectorAll('.widget-wrap');
+  const origWraps = canvasEl.querySelectorAll('.widget-wrap');
 
-  // Replace widget iframes with print-safe placeholders
-  clone.querySelectorAll('.widget-wrap').forEach(wrap => {
+  for (let i = 0; i < wraps.length; i++) {
+    const wrap = wraps[i];
     const title = wrap.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';
-    const ph = document.createElement('div');
-    ph.className = 'widget-placeholder';
-    ph.innerHTML = '<div class="wp-title">\u{1F4CA} ' + title + '</div>'
-                 + '<div class="wp-desc">Interactive dashboard widget</div>';
-    wrap.replaceWith(ph);
-  });
+    const iframe = origWraps[i]?.querySelector('iframe');
+    const embedUrl = iframe?.src || '';
+    let el;
 
-  // Remove editor-only UI
-  clone.querySelectorAll('.widget-toolbar, .widget-resize-bar, .ProseMirror-trailingBreak').forEach(el => el.remove());
+    if (embedUrl) {
+      onProgress?.('Capturing ' + (i+1) + '/' + wraps.length + ': ' + title);
+      const dataUrl = await captureWidget(embedUrl);
+      if (dataUrl) {
+        el = document.createElement('div');
+        el.className = 'widget-screenshot';
+        const img = document.createElement('img');
+        img.src = dataUrl;
+        img.alt = title;
+        el.appendChild(img);
+        const cap = document.createElement('div');
+        cap.className = 'ws-caption';
+        cap.textContent = title;
+        el.appendChild(cap);
+      }
+    }
 
-  // Remove contenteditable artifacts
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'widget-placeholder';
+      el.innerHTML = '<div class="wp-title">Dashboard Widget: ' + title + '</div>'
+        + '<div class="wp-desc">Interactive widget — view online</div>';
+    }
+    wrap.replaceWith(el);
+  }
+
+  clone.querySelectorAll('.widget-toolbar, .widget-resize-bar, .ProseMirror-trailingBreak').forEach(e => e.remove());
   clone.removeAttribute('contenteditable');
   clone.removeAttribute('role');
   clone.classList.remove('ProseMirror');
-
   return clone.innerHTML;
 }
 
@@ -140,7 +185,7 @@ export async function exportToPDF(canvasEl, title, onProgress) {
   const pagedJs = await fetchPagedJs();
 
   report('Preparing document\u2026');
-  const html = extractPrintHtml(canvasEl);
+  const html = await extractPrintHtml(canvasEl, report);
   const date = new Date().toLocaleDateString();
   const safeTitle = title || 'Report';
 
