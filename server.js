@@ -54,14 +54,16 @@ async function ensureSchema() {
   const db = await getPool();
   if (!db) return;
   try {
+    // Ensure app_data schema exists (SP can create its own schemas)
+    await db.query('CREATE SCHEMA IF NOT EXISTS app_data');
     // Check if documents table exists
     const { rows } = await db.query(
-      "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'documents') AS ok"
+      "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'app_data' AND tablename = 'documents') AS ok"
     );
     if (!rows[0].ok) {
-      console.log('[db] Creating documents table (lazy init)...');
+      console.log('[db] Creating app_data.documents table (lazy init)...');
       await db.query(`
-        CREATE TABLE IF NOT EXISTS documents (
+        CREATE TABLE IF NOT EXISTS app_data.documents (
           id TEXT PRIMARY KEY,
           title TEXT NOT NULL DEFAULT 'Untitled',
           content JSONB NOT NULL DEFAULT '{}',
@@ -95,7 +97,7 @@ async function ensureSchema() {
         ],
       };
       await db.query(
-        'INSERT INTO documents (id, title, content) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        'INSERT INTO app_data.documents (id, title, content) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
         ['summer-campaign-report', 'Summer Campaign Report', JSON.stringify(seedContent)]
       );
       console.log('[db] Seed document inserted');
@@ -116,8 +118,9 @@ async function initDatabase() {
   console.log('[db] PGDATABASE:', process.env.PGDATABASE || '(not set)');
   const client = await db.connect();
   try {
+    await client.query('CREATE SCHEMA IF NOT EXISTS app_data');
     await client.query(`
-      CREATE TABLE IF NOT EXISTS documents (
+      CREATE TABLE IF NOT EXISTS app_data.documents (
         id TEXT PRIMARY KEY,
         title TEXT NOT NULL DEFAULT 'Untitled',
         content JSONB NOT NULL DEFAULT '{}',
@@ -128,7 +131,7 @@ async function initDatabase() {
     console.log('[db] Schema ready');
 
     // Seed: insert a sample document if table is empty
-    const { rows } = await client.query('SELECT COUNT(*) AS cnt FROM documents');
+    const { rows } = await client.query('SELECT COUNT(*) AS cnt FROM app_data.documents');
     if (parseInt(rows[0].cnt) === 0) {
       console.log('[db] Inserting seed document...');
       const seedContent = {
@@ -158,7 +161,7 @@ async function initDatabase() {
         ],
       };
       await client.query(
-        'INSERT INTO documents (id, title, content) VALUES ($1, $2, $3)',
+        'INSERT INTO app_data.documents (id, title, content) VALUES ($1, $2, $3)',
         ['summer-campaign-report', 'Summer Campaign Report', JSON.stringify(seedContent)]
       );
       console.log('[db] Seed document created');
@@ -388,7 +391,7 @@ async function handleApi(req, res, url) {
     try {
       const db = await getPool();
       if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
-      const { rows } = await db.query('SELECT id, title, content, updated_at FROM documents WHERE id = $1', [documentId]);
+      const { rows } = await db.query('SELECT id, title, content, updated_at FROM app_data.documents WHERE id = $1', [documentId]);
       if (rows.length === 0) { sendJson(res, 404, { error: 'Document not found', documentId }); return true; }
       const doc = rows[0];
       sendJson(res, 200, { documentId: doc.id, title: doc.title, content: doc.content, updatedAt: doc.updated_at });
@@ -409,7 +412,7 @@ async function handleApi(req, res, url) {
       const db = await getPool();
       if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
       const { rows } = await db.query(
-        'UPDATE documents SET title = $1, updated_at = NOW() WHERE id = $2 RETURNING title',
+        'UPDATE app_data.documents SET title = $1, updated_at = NOW() WHERE id = $2 RETURNING title',
         [parsed.title, docId]
       );
       if (rows.length === 0) { sendJson(res, 404, { error: 'Not found' }); return true; }
@@ -434,7 +437,7 @@ async function handleApi(req, res, url) {
       const db = await getPool();
       if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
       await db.query(`
-        INSERT INTO documents (id, title, content, updated_at)
+        INSERT INTO app_data.documents (id, title, content, updated_at)
         VALUES ($1, $2, $3, NOW())
         ON CONFLICT (id) DO UPDATE SET content = $3, title = $2, updated_at = NOW()
       `, [documentId, title, JSON.stringify(content)]);
@@ -452,7 +455,7 @@ async function handleApi(req, res, url) {
     try {
       const db = await getPool();
       if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
-      const { rows } = await db.query('SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC');
+      const { rows } = await db.query('SELECT id, title, updated_at FROM app_data.documents ORDER BY updated_at DESC');
       const documents = rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at }));
       sendJson(res, 200, { documents });
       return true;
@@ -467,7 +470,7 @@ async function handleApi(req, res, url) {
     try {
       const db = await getPool();
       if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
-      const { rowCount } = await db.query('DELETE FROM documents WHERE id = $1', [documentId]);
+      const { rowCount } = await db.query('DELETE FROM app_data.documents WHERE id = $1', [documentId]);
       if (rowCount === 0) { sendJson(res, 404, { error: 'Not found' }); return true; }
       sendJson(res, 200, { deleted: true });
       return true;
@@ -494,7 +497,7 @@ async function handleApi(req, res, url) {
         const { rows } = await dbg.query('SELECT 1 AS ok');
         info.connected = true;
         info.testQuery = rows[0];
-        const tables = await dbg.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+        const tables = await dbg.query("SELECT schemaname, tablename FROM pg_tables WHERE schemaname IN ('public', 'app_data')");
         info.tables = tables.rows.map(r => r.tablename);
       } catch (err) {
         info.connected = false;
