@@ -213,6 +213,25 @@ function App() {
     }
   }, [activeDocId]);
 
+  const handleExportPPTX = useCallback(async () => {
+    const canvas = document.querySelector('.editor-canvas');
+    if (!canvas) { setError('Cannot find editor canvas for export'); return; }
+    const firstH = canvas.querySelector('h1, h2, h3');
+    const docTitle = firstH?.textContent || activeDocId || 'report';
+    setStatus('saving');
+    setExportMsg('Starting PowerPoint export...');
+    try {
+      await exportToPPTX(canvas, docTitle, msg => setExportMsg(msg));
+      setStatus('saved');
+      setExportMsg('');
+    } catch (e) {
+      console.error('PPTX export error:', e);
+      setError('PPTX export failed: ' + e.message);
+      setStatus('error');
+      setExportMsg('');
+    }
+  }, [activeDocId]);
+
   // ── Widget insertion ──
   const insertWidget = useCallback(widget => {
     if (!editor) return;
