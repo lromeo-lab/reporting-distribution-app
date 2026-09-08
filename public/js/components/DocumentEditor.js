@@ -30,6 +30,47 @@ export function DocumentEditor({ initialContent, onEditorReady, onContentChange,
       attributes: {
         spellcheck: 'true',
       },
+      handleDrop(view, event) {
+        const file = event.dataTransfer?.files?.[0];
+        if (!file || !file.type.startsWith('image/')) return false;
+        event.preventDefault();
+        const reader = new FileReader();
+        reader.onload = () => {
+          const pos = view.posAtCoords({ left: event.clientX, top: event.clientY });
+          const node = view.state.schema.nodes.databricksWidget.create({
+            imageData: reader.result,
+            title: file.name.replace(/\.[^.]+$/, ''),
+            caption: '',
+          });
+          const tr = view.state.tr.insert(pos?.pos ?? view.state.selection.head, node);
+          view.dispatch(tr);
+        };
+        reader.readAsDataURL(file);
+        return true;
+      },
+      handlePaste(view, event) {
+        const items = event.clipboardData?.items;
+        if (!items) return false;
+        for (const item of items) {
+          if (item.type.startsWith('image/')) {
+            event.preventDefault();
+            const file = item.getAsFile();
+            const reader = new FileReader();
+            reader.onload = () => {
+              const node = view.state.schema.nodes.databricksWidget.create({
+                imageData: reader.result,
+                title: 'Pasted widget',
+                caption: '',
+              });
+              const tr = view.state.tr.replaceSelectionWith(node);
+              view.dispatch(tr);
+            };
+            reader.readAsDataURL(file);
+            return true;
+          }
+        }
+        return false;
+      },
     },
     onUpdate: ({ editor: activeEditor }) => {
       onContentChange(activeEditor.getJSON());

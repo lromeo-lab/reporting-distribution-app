@@ -47,6 +47,7 @@ p  { margin: 0 0 8pt; }
 ul, ol { margin: 0 0 8pt; padding-left: 20pt; }
 li { margin-bottom: 3pt; }
 a { color: #0f766e; text-decoration: underline; }
+img { max-width: 100%; height: auto; }
 
 /* ── Blocks ── */
 blockquote {
@@ -448,7 +449,8 @@ export async function exportToPPTX(canvasEl, title, onProgress) {
     // ── Widget ──
     if (node.classList?.contains('widget-figure') || node.querySelector?.('.widget-figure')) {
       const slide = needSlide();
-      const wTitle = node.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';
+      const wTitle = node.querySelector('.widget-caption-text')?.textContent || 'Widget';
+      const imgEl = node.querySelector('.widget-img');
       if (imgEl?.src && imgEl.src.startsWith('data:')) {
         // Real image — insert into slide
         const h = 4.5;

@@ -238,6 +238,26 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // Rename document
+  if (req.method === 'POST' && url.pathname.endsWith('/rename') && url.pathname.startsWith('/api/documents/')) {
+    const docId = url.pathname.split('/')[3];
+    const body = await readBody(req);
+    const parsed = JSON.parse(body);
+    const filePath = path.join(dataDir, docId + '.json');
+    try {
+      const raw = await fsp.readFile(filePath, 'utf-8');
+      const doc = JSON.parse(raw);
+      doc.title = parsed.title || doc.title;
+      doc.updatedAt = new Date().toISOString();
+      await fsp.writeFile(filePath, JSON.stringify(doc, null, 2));
+      sendJson(res, 200, { ok: true, title: doc.title });
+    } catch (err) {
+      if (err.code === 'ENOENT') sendJson(res, 404, { error: 'Not found' });
+      else sendJson(res, 500, { error: err.message });
+    }
+    return true;
+  }
+
   if (req.method === 'POST' && url.pathname.startsWith('/api/documents/')) {
     try {
       const rawBody = await readRequestBody(req);

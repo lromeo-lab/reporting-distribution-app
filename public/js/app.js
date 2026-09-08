@@ -232,20 +232,21 @@ function App() {
     }
   }, [activeDocId]);
 
+
+  const handleRenameDoc = useCallback(async (docId, newTitle) => {
+    try {
+      await fetch('/api/documents/' + docId + '/rename', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: newTitle }),
+      });
+      refreshDocList();
+    } catch (e) {
+      console.error('Rename failed:', e);
+    }
+  }, []);
+
   // ── Widget insertion ──
-  const insertWidget = useCallback(widget => {
-    if (!editor) return;
-    editor.chain().focus().insertDatabricksWidget({
-      imageData: widget.imageData || '',
-      title: widget.title || '',
-      caption: widget.caption || '',
-    }).run();
-  }, [editor]);
-
-  const handlePickerSelect = useCallback(widget => {
-    insertWidget(widget); setModalMode(null);
-  }, [insertWidget]);
-
   
   // ── Render ──
   return html`
@@ -288,7 +289,7 @@ function App() {
         docId=${deleteTarget} onClose=${() => setModalMode(null)}
         onConfirm=${handleConfirmDelete} />` : null}
       ${modalMode === 'picker' ? html`<${WidgetPicker}
-        onSelect=${handlePickerSelect} onClose=${() => setModalMode(null)} />` : null}
+        onClose=${() => setModalMode(null)} />` : null}
 
     </div>
   `;
