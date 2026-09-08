@@ -306,7 +306,7 @@ async function handleApi(req, res, url) {
       return true;
     } catch (err) {
       console.error('Read document error:', err.message);
-      sendJson(res, 500, { error: 'Unable to read document' });
+      sendJson(res, 500, { error: 'Read failed: ' + err.message });
       return true;
     }
   }
@@ -350,8 +350,8 @@ async function handleApi(req, res, url) {
       sendJson(res, 200, { ok: true, documentId, updatedAt: new Date().toISOString() });
       return true;
     } catch (err) {
-      console.error('Write document error:', err.message);
-      sendJson(res, 400, { error: 'Invalid document payload' });
+      console.error('Write document error:', err.message, err.stack);
+      sendJson(res, 500, { error: 'Save failed: ' + err.message });
       return true;
     }
   }
@@ -382,6 +382,33 @@ async function handleApi(req, res, url) {
       sendJson(res, 500, { error: err.message });
       return true;
     }
+  }
+
+
+  // Debug endpoint — check database connectivity
+  if (req.method === 'GET' && url.pathname === '/api/debug/db') {
+    const info = {
+      pgHost: process.env.PGHOST ? process.env.PGHOST.substring(0, 30) + '...' : '(not set)',
+      pgDatabase: process.env.PGDATABASE || '(not set)',
+      pgUser: process.env.PGUSER ? '***' + process.env.PGUSER.slice(-4) : '(not set)',
+      pgPort: process.env.PGPORT || '(not set)',
+      pgSslMode: process.env.PGSSLMODE || '(not set)',
+      poolAvailable: !!pool,
+    };
+    if (pool) {
+      try {
+        const { rows } = await pool.query('SELECT 1 AS ok');
+        info.connected = true;
+        info.testQuery = rows[0];
+        const tables = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+        info.tables = tables.rows.map(r => r.tablename);
+      } catch (err) {
+        info.connected = false;
+        info.error = err.message;
+      }
+    }
+    sendJson(res, 200, info);
+    return true;
   }
 
   if (req.method === 'GET' && url.pathname === '/api/health') {
