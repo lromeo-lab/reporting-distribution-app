@@ -452,17 +452,28 @@ export async function exportToPPTX(canvasEl, title, onProgress) {
       const wTitle = node.querySelector('.widget-caption-text')?.textContent || 'Widget';
       const imgEl = node.querySelector('.widget-img');
       if (imgEl?.src && imgEl.src.startsWith('data:')) {
-        // Real image — insert into slide
-        const h = 4.5;
+        // Real image — fit within max box preserving aspect ratio
+        const maxW = BODY_W * 0.85;  // don't span full width
+        const maxH = 4.2;
+        // Load image to get natural dimensions
+        const dims = await new Promise(resolve => {
+          const img = new Image();
+          img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+          img.onerror = () => resolve({ w: 16, h: 9 });
+          img.src = imgEl.src;
+        });
+        const aspect = dims.w / dims.h;
+        let fitW = maxW, fitH = maxW / aspect;
+        if (fitH > maxH) { fitH = maxH; fitW = maxH * aspect; }
+        const imgX = MARGIN.left + (BODY_W - fitW) / 2; // center
         slide.addImage({
-          data: imgEl.src, x: MARGIN.left, y: currentY,
-          w: BODY_W, h: h, sizing: { type: 'contain', w: BODY_W, h: h },
+          data: imgEl.src, x: imgX, y: currentY, w: fitW, h: fitH,
         });
         slide.addText(wTitle, {
-          x: MARGIN.left, y: currentY + h + 0.05, w: BODY_W, h: 0.3,
+          x: MARGIN.left, y: currentY + fitH + 0.08, w: BODY_W, h: 0.3,
           fontSize: 9, fontFace: 'Arial', color: T.gray, align: 'center',
         });
-        currentY += h + 0.45;
+        currentY += fitH + 0.5;
       } else {
         // Placeholder
         const h = 2.0;
