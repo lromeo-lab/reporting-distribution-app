@@ -3,12 +3,12 @@ const https = require('https');
 const fsp = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
-let Pool;
+let pg;
 try {
-  Pool = require('pg').Pool;
+  pg = require('pg');
 } catch (e) {
   console.error('[db] Failed to load pg module:', e.message);
-  Pool = null;
+  pg = null;
 }
 
 const port = Number(process.env.DATABRICKS_APP_PORT || 8080);
@@ -18,18 +18,42 @@ const defaultDocumentId = 'default';
 
 // --------------- Lakebase (Postgres) ---------------
 // PG* env vars are auto-injected by Databricks Apps when Lakebase resource is configured
-const pool = Pool ? new Pool({
-  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
-  max: 5,
-  idleTimeoutMillis: 30000,
-}) : null;
+// Lakebase uses OAuth JWT tokens for auth — we manage the pool lifecycle
+let pool = null;
+let poolTokenExpiry = 0;
+
+async function getPool() {
+  if (!pg) return null;
+  const now = Date.now();
+  // Reuse pool if token is still valid (refresh 2 min before expiry)
+  if (pool && now < poolTokenExpiry - 120_000) return pool;
+
+  console.log('[db] Refreshing Lakebase connection with fresh OAuth token...');
+  try {
+    const token = await getAccessToken();
+    // End old pool gracefully
+    if (pool) { pool.end().catch(() => {}); }
+    pool = new pg.Pool({
+      password: token,
+      ssl: { rejectUnauthorized: false },
+      max: 5,
+      idleTimeoutMillis: 30000,
+    });
+    poolTokenExpiry = now + 3500_000; // ~58 minutes
+    return pool;
+  } catch (err) {
+    console.error('[db] Failed to create pool:', err.message);
+    return null;
+  }
+}
 
 async function initDatabase() {
-  if (!pool) throw new Error('No database pool available');
+  const db = await getPool();
+  if (!db) throw new Error('No database pool available');
   console.log('[db] Connecting to Lakebase...');
   console.log('[db] PGHOST:', process.env.PGHOST || '(not set)');
   console.log('[db] PGDATABASE:', process.env.PGDATABASE || '(not set)');
-  const client = await pool.connect();
+  const client = await db.connect();
   try {
     await client.query(`
       CREATE TABLE IF NOT EXISTS documents (
@@ -229,8 +253,8 @@ const mimeTypes = {
 async function ensureDirectories() {
   await fsp.mkdir(publicDir, { recursive: true });
   try {
-    if (pool) await initDatabase();
-    else console.warn('[db] Skipping database init (pg not available)');
+    if (pg) await initDatabase();
+    else console.warn('[db] Skipping database init (pg module not available)');
   } catch (err) {
     console.error('[db] Database init failed:', err.message);
     console.error('[db] App will run without persistence — documents will not be saved');
@@ -296,10 +320,11 @@ async function handleApi(req, res, url) {
   const documentId = pathParts[2] || defaultDocumentId;
 
   // GET single document
-    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'GET' && url.pathname.startsWith('/api/documents/') && !url.pathname.endsWith('/rename')) {
     try {
-      const { rows } = await pool.query('SELECT id, title, content, updated_at FROM documents WHERE id = $1', [documentId]);
+      const db = await getPool();
+      if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
+      const { rows } = await db.query('SELECT id, title, content, updated_at FROM documents WHERE id = $1', [documentId]);
       if (rows.length === 0) { sendJson(res, 404, { error: 'Document not found', documentId }); return true; }
       const doc = rows[0];
       sendJson(res, 200, { documentId: doc.id, title: doc.title, content: doc.content, updatedAt: doc.updated_at });
@@ -312,13 +337,14 @@ async function handleApi(req, res, url) {
   }
 
   // Rename document
-    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'POST' && url.pathname.endsWith('/rename') && url.pathname.startsWith('/api/documents/')) {
     try {
       const docId = url.pathname.split('/')[3];
       const body = await readRequestBody(req);
       const parsed = JSON.parse(body);
-      const { rows } = await pool.query(
+      const db = await getPool();
+      if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
+      const { rows } = await db.query(
         'UPDATE documents SET title = $1, updated_at = NOW() WHERE id = $2 RETURNING title',
         [parsed.title, docId]
       );
@@ -331,7 +357,6 @@ async function handleApi(req, res, url) {
   }
 
   // Save document (upsert)
-    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'POST' && url.pathname.startsWith('/api/documents/')) {
     try {
       const rawBody = await readRequestBody(req);
@@ -342,7 +367,9 @@ async function handleApi(req, res, url) {
       const firstH = (content.content || []).find(n => n.type === 'heading');
       if (firstH?.content?.[0]?.text) title = firstH.content[0].text;
 
-      await pool.query(`
+      const db = await getPool();
+      if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
+      await db.query(`
         INSERT INTO documents (id, title, content, updated_at)
         VALUES ($1, $2, $3, NOW())
         ON CONFLICT (id) DO UPDATE SET content = $3, title = $2, updated_at = NOW()
@@ -357,10 +384,11 @@ async function handleApi(req, res, url) {
   }
 
   // List documents
-    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'GET' && url.pathname === '/api/documents') {
     try {
-      const { rows } = await pool.query('SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC');
+      const db = await getPool();
+      if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
+      const { rows } = await db.query('SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC');
       const documents = rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at }));
       sendJson(res, 200, { documents });
       return true;
@@ -371,10 +399,11 @@ async function handleApi(req, res, url) {
   }
 
   // Delete document
-    if (!pool) { sendJson(res, 503, { error: 'Database not available' }); return true; }
   if (req.method === 'DELETE' && url.pathname.startsWith('/api/documents/')) {
     try {
-      const { rowCount } = await pool.query('DELETE FROM documents WHERE id = $1', [documentId]);
+      const db = await getPool();
+      if (!db) { sendJson(res, 503, { error: 'Database not available' }); return true; }
+      const { rowCount } = await db.query('DELETE FROM documents WHERE id = $1', [documentId]);
       if (rowCount === 0) { sendJson(res, 404, { error: 'Not found' }); return true; }
       sendJson(res, 200, { deleted: true });
       return true;
@@ -393,14 +422,15 @@ async function handleApi(req, res, url) {
       pgUser: process.env.PGUSER ? '***' + process.env.PGUSER.slice(-4) : '(not set)',
       pgPort: process.env.PGPORT || '(not set)',
       pgSslMode: process.env.PGSSLMODE || '(not set)',
-      poolAvailable: !!pool,
+      poolAvailable: !!pg,
     };
-    if (pool) {
+    if (pg) {
       try {
-        const { rows } = await pool.query('SELECT 1 AS ok');
+        const dbg = await getPool();
+        const { rows } = await dbg.query('SELECT 1 AS ok');
         info.connected = true;
         info.testQuery = rows[0];
-        const tables = await pool.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+        const tables = await dbg.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
         info.tables = tables.rows.map(r => r.tablename);
       } catch (err) {
         info.connected = false;
