@@ -5,7 +5,6 @@ import { Toolbar } from './components/Toolbar.js';
 import { Sidebar } from './components/Sidebar.js';
 import { DocumentEditor } from './components/DocumentEditor.js';
 import { WidgetPicker } from './components/WidgetPicker.js';
-import { createSeedDocument } from './components/WidgetExtension.js';
 import { loadDocument, saveDocument, listDocuments, deleteDocument } from './utils/api.js';
 import { I18nProvider, useI18n } from './utils/i18n.js';
 import { exportToPDF, exportToPPTX } from './utils/export.js';
@@ -60,37 +59,6 @@ function DeleteModal({ docId, onClose, onConfirm }) {
 }
 
 // ── Manual Widget Modal ──
-function ManualWidgetModal({ formState, onChange, onClose, onSubmit, onSwitchBrowse }) {
-  const { t } = useI18n();
-  return html`
-    <div className="modal-backdrop" onClick=${onClose}>
-      <div className="modal-card" onClick=${e => e.stopPropagation()}>
-        <h3>${t('insertManual')}</h3>
-        <p>${t('formHint')}</p>
-        <div className="form-grid">
-          <label>${t('widgetTitle')}
-            <input type="text" value=${formState.title}
-              onInput=${e => onChange('title', e.target.value)} placeholder="e.g. Revenue Trend" />
-          </label>
-          <label>${t('widgetEmbedUrl')}
-            <textarea value=${formState.src}
-              onInput=${e => onChange('src', e.target.value)}
-              placeholder="https://.../embed/dashboardsv3/...&fullscreenWidget=..."></textarea>
-          </label>
-          <label>${t('heightPx')}
-            <input type="number" min="180" max="1200" value=${formState.height}
-              onInput=${e => onChange('height', e.target.value)} />
-          </label>
-        </div>
-        <div className="modal-actions">
-          <button type="button" onClick=${onSwitchBrowse}>${t('browseDashboards')}</button>
-          <button type="button" onClick=${onClose}>${t('cancel')}</button>
-          <button type="button" className="confirm" onClick=${onSubmit}>${t('insert')}</button>
-        </div>
-      </div>
-    </div>
-  `;
-}
 
 // ── Main App ──
 function App() {
@@ -102,9 +70,8 @@ function App() {
   const [status, setStatus] = useState('loading');
   const [savedAt, setSavedAt] = useState(null);
   const [error, setError] = useState('');
-  const [modalMode, setModalMode] = useState(null); // null|'picker'|'manual'|'newdoc'|'delete'
+  const [modalMode, setModalMode] = useState(null); // null|'picker'|'newdoc'|'delete'
   const [deleteTarget, setDeleteTarget] = useState(null);
-  const [widgetForm, setWidgetForm] = useState({ title: '', src: '', caption: '', height: '380' });
   const latestContentRef = useRef(null);
   const hasLoadedRef = useRef(false);
   const dirtyRef = useRef(false);
@@ -157,7 +124,7 @@ function App() {
       try {
         const stored = await loadDocument(activeDocId);
         // Only use seed for the 'default' doc if it doesn't exist yet
-        const content = stored?.content || (activeDocId === 'default' ? createSeedDocument(t) : BLANK_DOC);
+        const content = stored?.content || BLANK_DOC;
         latestContentRef.current = content;
         setDocumentContent(content);
         setSavedAt(stored?.updatedAt || null);
@@ -167,7 +134,7 @@ function App() {
           try { await saveDocument(activeDocId, content); } catch (_) {}
         }
       } catch (_) {
-        const fallback = activeDocId === 'default' ? createSeedDocument(t) : BLANK_DOC;
+        const fallback = BLANK_DOC;
         latestContentRef.current = fallback;
         setDocumentContent(fallback);
         setStatus('dirty'); dirtyRef.current = true;
@@ -250,8 +217,9 @@ function App() {
   const insertWidget = useCallback(widget => {
     if (!editor) return;
     editor.chain().focus().insertDatabricksWidget({
-      title: widget.title || '', src: widget.src,
-      caption: widget.caption || '', height: Number(widget.height || 380),
+      imageData: widget.imageData || '',
+      title: widget.title || '',
+      caption: widget.caption || '',
     }).run();
   }, [editor]);
 
@@ -259,12 +227,7 @@ function App() {
     insertWidget(widget); setModalMode(null);
   }, [insertWidget]);
 
-  const handleSubmitWidget = useCallback(() => {
-    if (!widgetForm.src.includes('/embed/dashboardsv3/')) { setError(t('invalidUrl')); return; }
-    insertWidget(widgetForm); setModalMode(null);
-    setWidgetForm({ title: '', src: '', caption: '', height: '380' }); setError('');
-  }, [insertWidget, widgetForm]);
-
+  
   // ── Render ──
   return html`
     <div className="app-shell">
@@ -306,14 +269,8 @@ function App() {
         docId=${deleteTarget} onClose=${() => setModalMode(null)}
         onConfirm=${handleConfirmDelete} />` : null}
       ${modalMode === 'picker' ? html`<${WidgetPicker}
-        onSelect=${handlePickerSelect} onClose=${() => setModalMode(null)}
-        onSwitchManual=${() => setModalMode('manual')} />` : null}
-      ${modalMode === 'manual' ? html`<${ManualWidgetModal}
-        formState=${widgetForm}
-        onChange=${(f, v) => setWidgetForm(c => ({ ...c, [f]: v }))}
-        onClose=${() => { setModalMode(null); setWidgetForm({ title: '', src: '', caption: '', height: '380' }); }}
-        onSubmit=${handleSubmitWidget}
-        onSwitchBrowse=${() => setModalMode('picker')} />` : null}
+        onSelect=${handlePickerSelect} onClose=${() => setModalMode(null)} />` : null}
+
     </div>
   `;
 }

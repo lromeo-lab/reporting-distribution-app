@@ -328,42 +328,35 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
 }
 .editor-canvas .ProseMirror pre code { background: none; padding: 0; color: inherit; }
 
-/* ── Widget ── */
-.widget-wrap { margin: 1.6rem 0; }
-.widget-container {
-  position: relative; border-radius: 14px; overflow: hidden;
-  border: 1px solid var(--gray-200); background: var(--white);
-  box-shadow: var(--shadow-sm); transition: box-shadow 0.2s;
+/* ── Widget (image-based) ── */
+.widget-figure { margin: 16px 0; }
+.widget-image-container {
+  border: 1px solid var(--gray-200); border-radius: 12px;
+  overflow: hidden; background: var(--white);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
-.widget-container:hover { box-shadow: 0 2px 16px rgba(15, 23, 42, 0.10); }
-.widget-iframe-clip { overflow: hidden; border-radius: 12px; }
-.widget-iframe-clip iframe { width: 100%; border: none; display: block; background: var(--white); }
-.widget-toolbar {
-  position: absolute; top: 0; left: 0; right: 0; z-index: 10;
+.widget-img {
+  display: block; width: 100%; height: auto;
+  border-bottom: 1px solid var(--gray-100);
+}
+.widget-empty {
+  padding: 48px 20px; text-align: center;
+  color: var(--slate-500); font-size: 0.85rem;
+  background: var(--gray-50);
+}
+.widget-caption-bar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 6px 10px;
-  background: linear-gradient(180deg, rgba(15,23,42,0.72) 0%, transparent 100%);
-  opacity: 0; transition: opacity 0.2s; pointer-events: none;
+  padding: 8px 14px; background: var(--gray-50);
+  font-size: 0.78rem;
 }
-.widget-container:hover .widget-toolbar { opacity: 1; pointer-events: auto; }
-.widget-toolbar-title { font-size: 0.78rem; font-weight: 600; color: var(--white); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
-.widget-toolbar-actions { display: flex; gap: 4px; }
-.widget-toolbar-actions a, .widget-toolbar-actions button {
-  width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;
-  border-radius: 8px; border: none; background: rgba(255,255,255,0.15);
-  color: var(--white); font-size: 0.82rem; cursor: pointer; text-decoration: none;
-  transition: background 0.15s; padding: 0;
+.widget-caption-text { color: var(--slate-500); font-weight: 500; }
+.widget-caption-actions { display: flex; gap: 6px; }
+.widget-caption-actions button {
+  background: none; border: none; cursor: pointer;
+  color: var(--slate-500); font-size: 0.85rem; padding: 2px 6px;
+  border-radius: 4px;
 }
-.widget-toolbar-actions a:hover, .widget-toolbar-actions button:hover { background: rgba(255,255,255,0.30); }
-.widget-resize-bar {
-  display: flex; align-items: center; justify-content: center;
-  height: 14px; cursor: ns-resize; background: var(--gray-50);
-  border-top: 1px solid var(--gray-200); opacity: 0; transition: opacity 0.15s; user-select: none;
-}
-.widget-container:hover .widget-resize-bar, .widget-wrap[data-resizing] .widget-resize-bar { opacity: 1; }
-.widget-resize-bar span { font-size: 0.7rem; color: var(--gray-400); letter-spacing: 2px; }
-.widget-wrap[data-resizing] .widget-container { box-shadow: 0 0 0 2px var(--teal); }
-.widget-wrap[data-resizing] iframe { pointer-events: none; }
+.widget-caption-actions button:hover { background: var(--gray-200); color: var(--slate-700); }
 
 /* ── Modals ── */
 .modal-backdrop {
@@ -478,8 +471,7 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: var(--
     border-radius: 0 !important; padding: 0 !important;
     max-width: 100% !important;
   }
-  .widget-toolbar, .widget-resize-bar { display: none !important; }
-  .editor-body { max-width: 100% !important; }
+    .editor-body { max-width: 100% !important; }
   h1, h2, h3, h4 { page-break-after: avoid; }
   blockquote, pre, .widget-wrap { page-break-inside: avoid; }
 }

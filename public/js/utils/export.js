@@ -95,75 +95,45 @@ table, figure         { break-inside: avoid; }
 }
 `;
 
-/**
- * Try to capture a widget screenshot from the server.
- * Returns a base64 data URL on success, null on failure.
- */
-async function captureWidget(embedUrl) {
-  try {
-    const resp = await fetch('/api/proxy/widget-screenshot?url=' + encodeURIComponent(embedUrl));
-    if (!resp.ok) {
-      console.warn('[export] Screenshot HTTP', resp.status);
-      return null;
-    }
-    const blob = await resp.blob();
-    return await new Promise(resolve => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(r.result);
-      r.readAsDataURL(blob);
-    });
-  } catch (err) {
-    console.warn('[export] Screenshot error:', err.message);
-    return null;
-  }
-}
 
 /**
  * Extract clean HTML from editor DOM.
  * For each widget: try server screenshot, fallback to text placeholder.
  */
-async function extractPrintHtml(canvasEl, onProgress) {
+function extractPrintHtml(canvasEl) {
   const pm = canvasEl.querySelector('.ProseMirror');
   if (!pm) throw new Error('ProseMirror content not found');
 
   const clone = pm.cloneNode(true);
-  const wraps = clone.querySelectorAll('.widget-wrap');
-  const origWraps = canvasEl.querySelectorAll('.widget-wrap');
-
-  for (let i = 0; i < wraps.length; i++) {
-    const wrap = wraps[i];
-    const title = wrap.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';
-    const iframe = origWraps[i]?.querySelector('iframe');
-    const embedUrl = iframe?.src || '';
-    let el;
-
-    if (embedUrl) {
-      onProgress?.('Capturing ' + (i+1) + '/' + wraps.length + ': ' + title);
-      const dataUrl = await captureWidget(embedUrl);
-      if (dataUrl) {
-        el = document.createElement('div');
-        el.className = 'widget-screenshot';
-        const img = document.createElement('img');
-        img.src = dataUrl;
-        img.alt = title;
-        el.appendChild(img);
-        const cap = document.createElement('div');
-        cap.className = 'ws-caption';
-        cap.textContent = title;
-        el.appendChild(cap);
-      }
+  // Widget figures already contain <img> with base64 data — clean up UI elements
+  clone.querySelectorAll('.widget-figure').forEach(fig => {
+    const img = fig.querySelector('.widget-img');
+    const title = fig.querySelector('.widget-caption-text')?.textContent || 'Widget';
+    
+    if (img?.src) {
+      // Keep the image, wrap it cleanly for print
+      const container = document.createElement('div');
+      container.className = 'widget-screenshot';
+      const imgClone = document.createElement('img');
+      imgClone.src = img.src;
+      imgClone.alt = title;
+      container.appendChild(imgClone);
+      const cap = document.createElement('div');
+      cap.className = 'ws-caption';
+      cap.textContent = title;
+      container.appendChild(cap);
+      fig.replaceWith(container);
+    } else {
+      // No image — text placeholder
+      const ph = document.createElement('div');
+      ph.className = 'widget-placeholder';
+      ph.innerHTML = '<div class="wp-title">Widget: ' + title + '</div>'
+        + '<div class="wp-desc">No image captured</div>';
+      fig.replaceWith(ph);
     }
+  });
 
-    if (!el) {
-      el = document.createElement('div');
-      el.className = 'widget-placeholder';
-      el.innerHTML = '<div class="wp-title">Dashboard Widget: ' + title + '</div>'
-        + '<div class="wp-desc">Interactive widget — view online</div>';
-    }
-    wrap.replaceWith(el);
-  }
-
-  clone.querySelectorAll('.widget-toolbar, .widget-resize-bar, .ProseMirror-trailingBreak').forEach(e => e.remove());
+  clone.querySelectorAll('.ProseMirror-trailingBreak').forEach(e => e.remove());
   clone.removeAttribute('contenteditable');
   clone.removeAttribute('role');
   clone.classList.remove('ProseMirror');
@@ -185,7 +155,7 @@ export async function exportToPDF(canvasEl, title, onProgress) {
   const pagedJs = await fetchPagedJs();
 
   report('Preparing document\u2026');
-  const html = await extractPrintHtml(canvasEl, report);
+  const html = extractPrintHtml(canvasEl);
   const date = new Date().toLocaleDateString();
   const safeTitle = title || 'Report';
 
@@ -476,28 +446,35 @@ export async function exportToPPTX(canvasEl, title, onProgress) {
     }
 
     // ── Widget ──
-    if (node.classList?.contains('widget-wrap') || node.querySelector?.('.widget-wrap')) {
+    if (node.classList?.contains('widget-figure') || node.querySelector?.('.widget-figure')) {
       const slide = needSlide();
       const wTitle = node.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';
-      const h = 2.5;
-      slide.addShape(pptx.ShapeType.rect, {
-        x: MARGIN.left, y: currentY, w: BODY_W, h: h,
-        fill: { color: T.light }, line: { color: 'CBD5E1', width: 1, dashType: 'dash' },
-        rectRadius: 0.12,
-      });
-      slide.addText('\u{1F4CA}', {
-        x: MARGIN.left, y: currentY + 0.5, w: BODY_W, h: 0.6,
-        fontSize: 28, align: 'center',
-      });
-      slide.addText(wTitle, {
-        x: MARGIN.left + 0.5, y: currentY + 1.2, w: BODY_W - 1, h: 0.4,
-        fontSize: 14, fontFace: 'Arial', color: T.slate, bold: true, align: 'center',
-      });
-      slide.addText('Interactive dashboard widget', {
-        x: MARGIN.left + 0.5, y: currentY + 1.6, w: BODY_W - 1, h: 0.3,
-        fontSize: 10, fontFace: 'Arial', color: T.gray, align: 'center',
-      });
-      currentY += h + 0.2;
+      if (imgEl?.src && imgEl.src.startsWith('data:')) {
+        // Real image — insert into slide
+        const h = 4.5;
+        slide.addImage({
+          data: imgEl.src, x: MARGIN.left, y: currentY,
+          w: BODY_W, h: h, sizing: { type: 'contain', w: BODY_W, h: h },
+        });
+        slide.addText(wTitle, {
+          x: MARGIN.left, y: currentY + h + 0.05, w: BODY_W, h: 0.3,
+          fontSize: 9, fontFace: 'Arial', color: T.gray, align: 'center',
+        });
+        currentY += h + 0.45;
+      } else {
+        // Placeholder
+        const h = 2.0;
+        slide.addShape(pptx.ShapeType.rect, {
+          x: MARGIN.left, y: currentY, w: BODY_W, h: h,
+          fill: { color: T.light }, line: { color: 'CBD5E1', width: 1, dashType: 'dash' },
+          rectRadius: 0.12,
+        });
+        slide.addText(wTitle, {
+          x: MARGIN.left, y: currentY + 0.6, w: BODY_W, h: 0.5,
+          fontSize: 14, fontFace: 'Arial', color: T.slate, bold: true, align: 'center',
+        });
+        currentY += h + 0.2;
+      }
       continue;
     }
   }

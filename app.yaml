@@ -1,15 +1,3 @@
 command:
-  - bash
-  - -c
-  - |
-    echo "[startup] Installing Chromium system dependencies..."
-    apt-get update -qq 2>&1 | tail -1
-    apt-get install -y -qq libnss3 libnspr4 libasound2 libatk-bridge2.0-0 libdrm2 libxkbcommon0 libgbm1 libxshmfence1 2>&1 | tail -3
-    APT_EXIT=$?
-    if [ $APT_EXIT -eq 0 ]; then
-      echo "[startup] System libraries installed successfully"
-    else
-      echo "[startup] WARN: apt-get failed (exit $APT_EXIT) — screenshots will not work"
-    fi
-    echo "[startup] Starting Node.js server..."
-    exec node server.js
+  - node
+  - server.js
