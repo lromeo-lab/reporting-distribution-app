@@ -3,12 +3,78 @@ const https = require('https');
 const fsp = require('fs/promises');
 const path = require('path');
 const { URL } = require('url');
+const { Pool } = require('pg');
 
 const port = Number(process.env.DATABRICKS_APP_PORT || 8080);
 const rootDir = __dirname;
 const publicDir = path.join(rootDir, 'public');
-const dataDir = path.join(rootDir, 'data');
 const defaultDocumentId = 'default';
+
+// --------------- Lakebase (Postgres) ---------------
+// PG* env vars are auto-injected by Databricks Apps when Lakebase resource is configured
+const pool = new Pool({
+  ssl: process.env.PGSSLMODE === 'require' ? { rejectUnauthorized: false } : false,
+  max: 5,
+  idleTimeoutMillis: 30000,
+});
+
+async function initDatabase() {
+  console.log('[db] Connecting to Lakebase...');
+  console.log('[db] PGHOST:', process.env.PGHOST || '(not set)');
+  console.log('[db] PGDATABASE:', process.env.PGDATABASE || '(not set)');
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS documents (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL DEFAULT 'Untitled',
+        content JSONB NOT NULL DEFAULT '{}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      )
+    `);
+    console.log('[db] Schema ready');
+
+    // Seed: insert a sample document if table is empty
+    const { rows } = await client.query('SELECT COUNT(*) AS cnt FROM documents');
+    if (parseInt(rows[0].cnt) === 0) {
+      console.log('[db] Inserting seed document...');
+      const seedContent = {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Summer Campaign — Operational Report' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'This report analyses the Sonae MC summer beverages promotion across Continente stores (Jul 7 — Sep 7, 2026). The campaign targeted key beverage SKUs with promotional pricing and featured placement.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Revenue Collapse by Segment' }] },
+          { type: 'paragraph', content: [
+            { type: 'text', text: 'Promo Store + Promo SKU revenue collapsed from ' },
+            { type: 'text', marks: [{ type: 'bold' }], text: '€15K to €3K/store' },
+            { type: 'text', text: ' between weeks 33–37, while control segments held steady. This strongly suggests a ' },
+            { type: 'text', marks: [{ type: 'bold' }], text: 'stockout-driven revenue loss' },
+            { type: 'text', text: ' rather than a demand decline.' },
+          ]},
+          { type: 'paragraph', content: [{ type: 'text', marks: [{ type: 'italic' }], text: '👇 Drag the "Stockout Collapse" chart PNG below this paragraph.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Revenue vs OOS Rate' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'The correlation between out-of-stock rate spikes and revenue drops is clearly visible from week 34 onwards. The OOS rate peaks at ~70% in week 36, directly coinciding with the steepest revenue decline.' }] },
+          { type: 'paragraph', content: [{ type: 'text', marks: [{ type: 'italic' }], text: '👇 Drag the "Revenue vs OOS Rate" chart PNG below this paragraph.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Key Findings' }] },
+          { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The promotion was effective in driving initial demand, but supply chain execution failed to keep pace — resulting in widespread stockouts that erased the campaign gains by week 37.' }] }] },
+          { type: 'paragraph', content: [
+            { type: 'text', text: 'Estimated revenue at risk: ' },
+            { type: 'text', marks: [{ type: 'bold' }], text: '€2.4M' },
+            { type: 'text', text: ' across affected stores.' },
+          ]},
+        ],
+      };
+      await client.query(
+        'INSERT INTO documents (id, title, content) VALUES ($1, $2, $3)',
+        ['summer-campaign-report', 'Summer Campaign Report', JSON.stringify(seedContent)]
+      );
+      console.log('[db] Seed document created');
+    }
+  } finally {
+    client.release();
+  }
+}
 
 // --------------- Databricks Auth ---------------
 function resolveDatabricksHost() {
@@ -155,13 +221,9 @@ const mimeTypes = {
 
 async function ensureDirectories() {
   await fsp.mkdir(publicDir, { recursive: true });
-  await fsp.mkdir(dataDir, { recursive: true });
+  await initDatabase();
 }
 
-function getDocumentPath(documentId) {
-  const safeId = (documentId || defaultDocumentId).replace(/[^a-zA-Z0-9_-]/g, '');
-  return path.join(dataDir, `${safeId || defaultDocumentId}.json`);
-}
 
 async function readRequestBody(req) {
   return new Promise((resolve, reject) => {
@@ -169,7 +231,7 @@ async function readRequestBody(req) {
 
     req.on('data', chunk => {
       raw += chunk;
-      if (raw.length > 2_000_000) {
+      if (raw.length > 10_000_000) {
         reject(new Error('Payload too large'));
         req.destroy();
       }
@@ -220,19 +282,16 @@ async function handleApi(req, res, url) {
   const pathParts = url.pathname.split('/').filter(Boolean);
   const documentId = pathParts[2] || defaultDocumentId;
 
-  if (req.method === 'GET' && url.pathname.startsWith('/api/documents/')) {
+  // GET single document
+  if (req.method === 'GET' && url.pathname.startsWith('/api/documents/') && !url.pathname.endsWith('/rename')) {
     try {
-      const filePath = getDocumentPath(documentId);
-      const content = await fsp.readFile(filePath, 'utf8');
-      sendJson(res, 200, JSON.parse(content));
+      const { rows } = await pool.query('SELECT id, title, content, updated_at FROM documents WHERE id = $1', [documentId]);
+      if (rows.length === 0) { sendJson(res, 404, { error: 'Document not found', documentId }); return true; }
+      const doc = rows[0];
+      sendJson(res, 200, { documentId: doc.id, title: doc.title, content: doc.content, updatedAt: doc.updated_at });
       return true;
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        sendJson(res, 404, { error: 'Document not found', documentId });
-        return true;
-      }
-
-      console.error('Read document error:', error);
+    } catch (err) {
+      console.error('Read document error:', err.message);
       sendJson(res, 500, { error: 'Unable to read document' });
       return true;
     }
@@ -240,65 +299,53 @@ async function handleApi(req, res, url) {
 
   // Rename document
   if (req.method === 'POST' && url.pathname.endsWith('/rename') && url.pathname.startsWith('/api/documents/')) {
-    const docId = url.pathname.split('/')[3];
-    const body = await readBody(req);
-    const parsed = JSON.parse(body);
-    const filePath = path.join(dataDir, docId + '.json');
     try {
-      const raw = await fsp.readFile(filePath, 'utf-8');
-      const doc = JSON.parse(raw);
-      doc.title = parsed.title || doc.title;
-      doc.updatedAt = new Date().toISOString();
-      await fsp.writeFile(filePath, JSON.stringify(doc, null, 2));
-      sendJson(res, 200, { ok: true, title: doc.title });
+      const docId = url.pathname.split('/')[3];
+      const body = await readRequestBody(req);
+      const parsed = JSON.parse(body);
+      const { rows } = await pool.query(
+        'UPDATE documents SET title = $1, updated_at = NOW() WHERE id = $2 RETURNING title',
+        [parsed.title, docId]
+      );
+      if (rows.length === 0) { sendJson(res, 404, { error: 'Not found' }); return true; }
+      sendJson(res, 200, { ok: true, title: rows[0].title });
     } catch (err) {
-      if (err.code === 'ENOENT') sendJson(res, 404, { error: 'Not found' });
-      else sendJson(res, 500, { error: err.message });
+      sendJson(res, 500, { error: err.message });
     }
     return true;
   }
 
+  // Save document (upsert)
   if (req.method === 'POST' && url.pathname.startsWith('/api/documents/')) {
     try {
       const rawBody = await readRequestBody(req);
       const parsed = JSON.parse(rawBody || '{}');
-      const payload = {
-        documentId,
-        updatedAt: new Date().toISOString(),
-        content: parsed.content || parsed,
-      };
+      const content = parsed.content || parsed;
+      // Extract title from first heading
+      let title = documentId;
+      const firstH = (content.content || []).find(n => n.type === 'heading');
+      if (firstH?.content?.[0]?.text) title = firstH.content[0].text;
 
-      await fsp.writeFile(getDocumentPath(documentId), JSON.stringify(payload, null, 2), 'utf8');
-      sendJson(res, 200, { ok: true, documentId, updatedAt: payload.updatedAt });
+      await pool.query(`
+        INSERT INTO documents (id, title, content, updated_at)
+        VALUES ($1, $2, $3, NOW())
+        ON CONFLICT (id) DO UPDATE SET content = $3, title = $2, updated_at = NOW()
+      `, [documentId, title, JSON.stringify(content)]);
+      sendJson(res, 200, { ok: true, documentId, updatedAt: new Date().toISOString() });
       return true;
-    } catch (error) {
-      console.error('Write document error:', error);
+    } catch (err) {
+      console.error('Write document error:', err.message);
       sendJson(res, 400, { error: 'Invalid document payload' });
       return true;
     }
   }
 
-  // --------------- Document listing ---------------
+  // List documents
   if (req.method === 'GET' && url.pathname === '/api/documents') {
     try {
-      const files = await fsp.readdir(dataDir).catch(() => []);
-      const docs = [];
-      for (const file of files) {
-        if (!file.endsWith('.json')) continue;
-        const id = file.replace(/\.json$/, '');
-        const filePath = path.join(dataDir, file);
-        const stat = await fsp.stat(filePath);
-        let title = id;
-        try {
-          const raw = JSON.parse(await fsp.readFile(filePath, 'utf8'));
-          const content = raw.content || raw;
-          const firstHeading = (content.content || []).find(n => n.type === 'heading');
-          if (firstHeading?.content?.[0]?.text) title = firstHeading.content[0].text;
-        } catch (_) { /* ignore */ }
-        docs.push({ id, title, updatedAt: stat.mtime.toISOString() });
-      }
-      docs.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-      sendJson(res, 200, { documents: docs });
+      const { rows } = await pool.query('SELECT id, title, updated_at FROM documents ORDER BY updated_at DESC');
+      const documents = rows.map(r => ({ id: r.id, title: r.title, updatedAt: r.updated_at }));
+      sendJson(res, 200, { documents });
       return true;
     } catch (err) {
       sendJson(res, 500, { error: err.message });
@@ -306,18 +353,15 @@ async function handleApi(req, res, url) {
     }
   }
 
+  // Delete document
   if (req.method === 'DELETE' && url.pathname.startsWith('/api/documents/')) {
     try {
-      const filePath = getDocumentPath(documentId);
-      await fsp.unlink(filePath);
+      const { rowCount } = await pool.query('DELETE FROM documents WHERE id = $1', [documentId]);
+      if (rowCount === 0) { sendJson(res, 404, { error: 'Not found' }); return true; }
       sendJson(res, 200, { deleted: true });
       return true;
     } catch (err) {
-      if (err.code === 'ENOENT') {
-        sendJson(res, 404, { error: 'Not found' });
-      } else {
-        sendJson(res, 500, { error: err.message });
-      }
+      sendJson(res, 500, { error: err.message });
       return true;
     }
   }
