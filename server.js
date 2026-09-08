@@ -47,6 +47,67 @@ async function getPool() {
   }
 }
 
+let dbInitialized = false;
+
+async function ensureSchema() {
+  if (dbInitialized) return;
+  const db = await getPool();
+  if (!db) return;
+  try {
+    // Check if documents table exists
+    const { rows } = await db.query(
+      "SELECT EXISTS (SELECT 1 FROM pg_tables WHERE schemaname = 'public' AND tablename = 'documents') AS ok"
+    );
+    if (!rows[0].ok) {
+      console.log('[db] Creating documents table (lazy init)...');
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS documents (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL DEFAULT 'Untitled',
+          content JSONB NOT NULL DEFAULT '{}',
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        )
+      `);
+      console.log('[db] Table created. Inserting seed document...');
+      const seedContent = {
+        type: 'doc',
+        content: [
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Summer Campaign — Operational Report' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'This report analyses the Sonae MC summer beverages promotion across Continente stores (Jul 7 — Sep 7, 2026). The campaign targeted key beverage SKUs with promotional pricing and featured placement.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Revenue Collapse by Segment' }] },
+          { type: 'paragraph', content: [
+            { type: 'text', text: 'Promo Store + Promo SKU revenue collapsed from ' },
+            { type: 'text', marks: [{ type: 'bold' }], text: '€15K to €3K/store' },
+            { type: 'text', text: ' between weeks 33–37, while control segments held steady. This strongly suggests a ' },
+            { type: 'text', marks: [{ type: 'bold' }], text: 'stockout-driven revenue loss' },
+            { type: 'text', text: ' rather than a demand decline.' },
+          ]},
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Revenue vs OOS Rate' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'The correlation between out-of-stock rate spikes and revenue drops is clearly visible from week 34 onwards. The OOS rate peaks at ~70% in week 36, directly coinciding with the steepest revenue decline.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Key Findings' }] },
+          { type: 'blockquote', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'The promotion was effective in driving initial demand, but supply chain execution failed to keep pace — resulting in widespread stockouts that erased the campaign gains by week 37.' }] }] },
+          { type: 'paragraph', content: [
+            { type: 'text', text: 'Estimated revenue at risk: ' },
+            { type: 'text', marks: [{ type: 'bold' }], text: '€2.4M' },
+            { type: 'text', text: ' across affected stores.' },
+          ]},
+        ],
+      };
+      await db.query(
+        'INSERT INTO documents (id, title, content) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+        ['summer-campaign-report', 'Summer Campaign Report', JSON.stringify(seedContent)]
+      );
+      console.log('[db] Seed document inserted');
+    }
+    dbInitialized = true;
+    console.log('[db] Schema verified');
+  } catch (err) {
+    console.error('[db] Lazy init error:', err.message);
+    // Don't set dbInitialized — will retry on next request
+  }
+}
+
 async function initDatabase() {
   const db = await getPool();
   if (!db) throw new Error('No database pool available');
@@ -316,6 +377,9 @@ async function serveFile(res, filePath) {
 }
 
 async function handleApi(req, res, url) {
+  // Lazy init: ensure DB schema exists on first API call
+  if (!dbInitialized && url.pathname.startsWith('/api/documents')) await ensureSchema();
+
   const pathParts = url.pathname.split('/').filter(Boolean);
   const documentId = pathParts[2] || defaultDocumentId;
 
