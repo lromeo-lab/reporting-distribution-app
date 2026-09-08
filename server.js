@@ -481,7 +481,7 @@ async function handleApi(req, res, url) {
   // Debug endpoint — check database connectivity
   if (req.method === 'GET' && url.pathname === '/api/debug/db') {
     const info = {
-      pgHost: process.env.PGHOST ? process.env.PGHOST.substring(0, 30) + '...' : '(not set)',
+      pgHost: process.env.PGHOST || '(not set)',
       pgDatabase: process.env.PGDATABASE || '(not set)',
       pgUser: process.env.PGUSER ? '***' + process.env.PGUSER.slice(-4) : '(not set)',
       pgPort: process.env.PGPORT || '(not set)',
@@ -530,10 +530,10 @@ async function handleApi(req, res, url) {
       const tables = await db.query("SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')");
       steps.push({ step: 'list_tables', data: tables.rows });
 
-      // Step 4: Try CREATE TABLE
+      // Step 4: Try CREATE TABLE in public schema
       try {
         await db.query(`
-          CREATE TABLE IF NOT EXISTS documents (
+          CREATE TABLE IF NOT EXISTS public.documents (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL DEFAULT 'Untitled',
             content JSONB NOT NULL DEFAULT '{}',
@@ -541,9 +541,36 @@ async function handleApi(req, res, url) {
             updated_at TIMESTAMPTZ DEFAULT NOW()
           )
         `);
-        steps.push({ step: 'create_table', ok: true });
+        steps.push({ step: 'create_table_public', ok: true });
       } catch (createErr) {
-        steps.push({ step: 'create_table', ok: false, error: createErr.message, code: createErr.code, detail: createErr.detail });
+        steps.push({ step: 'create_table_public', ok: false, error: createErr.message, code: createErr.code });
+        
+        // Step 4b: Try creating own schema and table there
+        const spId = whoami.rows[0].current_user;
+        try {
+          await db.query(`CREATE SCHEMA IF NOT EXISTS app_data`);
+          steps.push({ step: 'create_schema_app_data', ok: true });
+          await db.query(`
+            CREATE TABLE IF NOT EXISTS app_data.documents (
+              id TEXT PRIMARY KEY,
+              title TEXT NOT NULL DEFAULT 'Untitled',
+              content JSONB NOT NULL DEFAULT '{}',
+              created_at TIMESTAMPTZ DEFAULT NOW(),
+              updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+          `);
+          steps.push({ step: 'create_table_app_data', ok: true });
+        } catch (schemaErr) {
+          steps.push({ step: 'create_schema_app_data', ok: false, error: schemaErr.message, code: schemaErr.code });
+        }
+        
+        // Step 4c: Check what schemas exist and their privileges
+        try {
+          const schemas = await db.query("SELECT schema_name, schema_owner FROM information_schema.schemata");
+          steps.push({ step: 'list_schemas', data: schemas.rows });
+        } catch (se) {
+          steps.push({ step: 'list_schemas', error: se.message });
+        }
       }
 
       // Step 5: Verify
