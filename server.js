@@ -505,6 +505,59 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+
+  // Debug: manually trigger schema creation and show exact error
+  if (req.method === 'GET' && url.pathname === '/api/debug/init') {
+    const steps = [];
+    try {
+      const db = await getPool();
+      steps.push({ step: 'getPool', ok: !!db });
+      if (!db) { sendJson(res, 200, { steps, error: 'No pool' }); return true; }
+
+      // Step 1: Check current user/role
+      const whoami = await db.query('SELECT current_user, current_database(), current_schema()');
+      steps.push({ step: 'whoami', data: whoami.rows[0] });
+
+      // Step 2: Check permissions
+      try {
+        const perms = await db.query("SELECT has_schema_privilege(current_user, 'public', 'CREATE') AS can_create");
+        steps.push({ step: 'check_create_perm', data: perms.rows[0] });
+      } catch (permErr) {
+        steps.push({ step: 'check_create_perm', error: permErr.message });
+      }
+
+      // Step 3: List existing tables
+      const tables = await db.query("SELECT schemaname, tablename FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')");
+      steps.push({ step: 'list_tables', data: tables.rows });
+
+      // Step 4: Try CREATE TABLE
+      try {
+        await db.query(`
+          CREATE TABLE IF NOT EXISTS documents (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL DEFAULT 'Untitled',
+            content JSONB NOT NULL DEFAULT '{}',
+            created_at TIMESTAMPTZ DEFAULT NOW(),
+            updated_at TIMESTAMPTZ DEFAULT NOW()
+          )
+        `);
+        steps.push({ step: 'create_table', ok: true });
+      } catch (createErr) {
+        steps.push({ step: 'create_table', ok: false, error: createErr.message, code: createErr.code, detail: createErr.detail });
+      }
+
+      // Step 5: Verify
+      const verify = await db.query("SELECT tablename FROM pg_tables WHERE schemaname = 'public'");
+      steps.push({ step: 'verify', tables: verify.rows.map(r => r.tablename) });
+
+      sendJson(res, 200, { steps });
+    } catch (err) {
+      steps.push({ step: 'fatal', error: err.message, stack: err.stack?.split('\n').slice(0, 3) });
+      sendJson(res, 200, { steps });
+    }
+    return true;
+  }
+
   if (req.method === 'GET' && url.pathname === '/api/health') {
     sendJson(res, 200, { ok: true, service: 'reporting-distribution-app', runtime: 'node' });
     return true;
