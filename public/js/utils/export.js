@@ -236,4 +236,284 @@ export async function exportToPDF(canvasEl, title, onProgress) {
 
 // Stubs
 export async function exportToDOCX() { throw new Error('Coming soon'); }
-export async function exportToPPTX() { throw new Error('Coming soon'); }
+/**
+ * Export editor content as a PowerPoint presentation.
+ *
+ * Slide mapping:
+ *  - First h1          → title slide (teal bg, white text)
+ *  - h2                → section divider slide + new content slide
+ *  - hr                → new slide
+ *  - p, ul, ol, pre    → content on current slide (auto-overflows to next)
+ *  - blockquote        → tinted content block
+ *  - widget            → placeholder card
+ *
+ * @param {HTMLElement} canvasEl – the .editor-canvas element
+ * @param {string}      title   – document title
+ * @param {function}    onProgress
+ */
+export async function exportToPPTX(canvasEl, title, onProgress) {
+  if (!canvasEl) throw new Error('No editor canvas');
+  const report = msg => onProgress?.(msg);
+
+  report('Loading PowerPoint engine\u2026');
+  const PptxGenJS = (await import('pptxgenjs')).default;
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';   // 13.33 x 7.5 in
+  pptx.author = 'AI/BI Report Studio';
+  pptx.title = title || 'Report';
+
+  // ── Theme ──
+  const T = {
+    teal: '0F766E', tealDk: '0D5F58', amber: 'F59E0B',
+    slate: '1E293B', gray: '64748B', light: 'F1F5F9', white: 'FFFFFF',
+  };
+
+  // ── Helpers ──
+  const MARGIN = { left: 0.8, top: 1.2, right: 0.8 };
+  const BODY_W = 13.33 - MARGIN.left - MARGIN.right;   // ~11.73
+  const MAX_Y  = 6.6;  // max y before needing a new slide
+
+  function addBrandFooter(slide) {
+    slide.addText('AI/BI Report Studio', {
+      x: 0.8, y: 7.0, w: 5, h: 0.35,
+      fontSize: 8, color: T.gray, fontFace: 'Arial',
+    });
+    slide.addText(new Date().toLocaleDateString(), {
+      x: 7.5, y: 7.0, w: 5, h: 0.35,
+      fontSize: 8, color: T.gray, fontFace: 'Arial', align: 'right',
+    });
+  }
+
+  function addHeaderBar(slide, sectionTitle) {
+    slide.addShape(pptx.ShapeType.rect, {
+      x: 0, y: 0, w: 13.33, h: 0.06, fill: { color: T.teal },
+    });
+    if (sectionTitle) {
+      slide.addText(sectionTitle, {
+        x: 0.8, y: 0.25, w: 10, h: 0.5,
+        fontSize: 11, color: T.gray, fontFace: 'Arial', bold: true,
+      });
+    }
+  }
+
+  /** Extract inline text runs with formatting from an element */
+  function extractRuns(el) {
+    const runs = [];
+    function walk(node, inherited) {
+      if (node.nodeType === 3) {
+        const text = node.textContent;
+        if (text) runs.push({ text, options: { ...inherited } });
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const fmt = { ...inherited };
+      const tag = node.tagName?.toLowerCase();
+      if (tag === 'strong' || tag === 'b') fmt.bold = true;
+      if (tag === 'em' || tag === 'i') fmt.italic = true;
+      if (tag === 'u') fmt.underline = true;
+      if (tag === 's') fmt.strike = true;
+      if (tag === 'code') { fmt.fontFace = 'Courier New'; fmt.fontSize = 11; fmt.color = 'BE123C'; }
+      if (tag === 'a') { fmt.color = T.teal; fmt.underline = true; fmt.hyperlink = { url: node.href || '' }; }
+      for (const child of node.childNodes) walk(child, fmt);
+    }
+    walk(el, { fontSize: 13, fontFace: 'Arial', color: T.slate });
+    return runs.length ? runs : [{ text: ' ', options: { fontSize: 13 } }];
+  }
+
+  // ── Parse editor DOM ──
+  report('Building slides\u2026');
+  const pm = canvasEl.querySelector('.ProseMirror');
+  if (!pm) throw new Error('Editor content not found');
+
+  const nodes = Array.from(pm.children);
+  let currentSlide = null;
+  let currentY = MARGIN.top;
+  let currentSection = '';
+  let isFirstH1 = true;
+
+  function needSlide() {
+    if (!currentSlide || currentY > MAX_Y) {
+      currentSlide = pptx.addSlide();
+      addHeaderBar(currentSlide, currentSection);
+      addBrandFooter(currentSlide);
+      currentY = MARGIN.top;
+    }
+    return currentSlide;
+  }
+
+  function addContentBlock(slide, runs, height, extraOpts) {
+    slide.addText(runs, {
+      x: MARGIN.left, y: currentY, w: BODY_W, h: height,
+      valign: 'top', lineSpacingMultiple: 1.2,
+      ...extraOpts,
+    });
+    currentY += height + 0.1;
+  }
+
+  for (const node of nodes) {
+    const tag = node.tagName?.toLowerCase();
+    if (!tag) continue;
+
+    // ── Title slide (first h1) ──
+    if (tag === 'h1' && isFirstH1) {
+      isFirstH1 = false;
+      const titleSlide = pptx.addSlide();
+      titleSlide.addShape(pptx.ShapeType.rect, {
+        x: 0, y: 0, w: 13.33, h: 7.5, fill: { color: T.teal },
+      });
+      titleSlide.addShape(pptx.ShapeType.rect, {
+        x: 0, y: 6.9, w: 13.33, h: 0.6, fill: { color: T.tealDk },
+      });
+      titleSlide.addText(node.textContent, {
+        x: 1.2, y: 2.0, w: 10.9, h: 2.0,
+        fontSize: 36, fontFace: 'Arial', color: T.white, bold: true,
+        lineSpacingMultiple: 1.1,
+      });
+      titleSlide.addText('AI/BI Report Studio  \u00b7  ' + new Date().toLocaleDateString(), {
+        x: 1.2, y: 4.2, w: 10.9, h: 0.5,
+        fontSize: 14, fontFace: 'Arial', color: 'A7F3D0',
+      });
+      currentSlide = null; // force new slide for content
+      continue;
+    }
+
+    // ── Section divider (h2) ──
+    if (tag === 'h2') {
+      currentSection = node.textContent;
+      const divSlide = pptx.addSlide();
+      divSlide.addShape(pptx.ShapeType.rect, {
+        x: 0, y: 0, w: 13.33, h: 7.5, fill: { color: T.light },
+      });
+      divSlide.addShape(pptx.ShapeType.rect, {
+        x: 1.0, y: 3.05, w: 2.5, h: 0.06, fill: { color: T.amber },
+      });
+      divSlide.addText(node.textContent, {
+        x: 1.0, y: 3.3, w: 11, h: 1.2,
+        fontSize: 28, fontFace: 'Arial', color: T.slate, bold: true,
+      });
+      addBrandFooter(divSlide);
+      currentSlide = null;
+      continue;
+    }
+
+    // ── Heading 3/4 ──
+    if (tag === 'h3' || tag === 'h4') {
+      const slide = needSlide();
+      const size = tag === 'h3' ? 18 : 15;
+      addContentBlock(slide, [{ text: node.textContent, options: {
+        fontSize: size, fontFace: 'Arial', color: T.slate, bold: true,
+      }}], tag === 'h3' ? 0.55 : 0.45);
+      continue;
+    }
+
+    // ── Horizontal rule → new slide ──
+    if (tag === 'hr') {
+      currentSlide = null;
+      continue;
+    }
+
+    // ── Paragraph ──
+    if (tag === 'p') {
+      const slide = needSlide();
+      const runs = extractRuns(node);
+      addContentBlock(slide, runs, 0.45);
+      continue;
+    }
+
+    // ── Lists (ul/ol) ──
+    if (tag === 'ul' || tag === 'ol') {
+      const slide = needSlide();
+      const items = Array.from(node.querySelectorAll(':scope > li'));
+      for (let i = 0; i < items.length; i++) {
+        if (currentY > MAX_Y) { currentSlide = null; needSlide(); }
+        const runs = extractRuns(items[i]);
+        const prefix = tag === 'ul' ? '\u2022 ' : (i + 1) + '. ';
+        runs.unshift({ text: prefix, options: { fontSize: 13, fontFace: 'Arial', color: T.slate } });
+        addContentBlock(currentSlide, runs, 0.38);
+      }
+      continue;
+    }
+
+    // ── Blockquote ──
+    if (tag === 'blockquote') {
+      const slide = needSlide();
+      const inner = node.querySelector('p') || node;
+      const runs = extractRuns(inner);
+      slide.addShape(pptx.ShapeType.rect, {
+        x: MARGIN.left, y: currentY, w: BODY_W, h: 0.7,
+        fill: { color: 'FEF9C3' }, rectRadius: 0.08,
+      });
+      slide.addShape(pptx.ShapeType.rect, {
+        x: MARGIN.left, y: currentY, w: 0.06, h: 0.7,
+        fill: { color: T.amber },
+      });
+      slide.addText(runs, {
+        x: MARGIN.left + 0.25, y: currentY, w: BODY_W - 0.35, h: 0.7,
+        valign: 'middle', lineSpacingMultiple: 1.15,
+      });
+      currentY += 0.8;
+      continue;
+    }
+
+    // ── Code block ──
+    if (tag === 'pre') {
+      const slide = needSlide();
+      const code = node.textContent;
+      const lines = code.split('\n').length;
+      const h = Math.max(0.6, Math.min(lines * 0.22, 3.0));
+      slide.addShape(pptx.ShapeType.rect, {
+        x: MARGIN.left, y: currentY, w: BODY_W, h: h,
+        fill: { color: T.slate }, rectRadius: 0.1,
+      });
+      slide.addText(code, {
+        x: MARGIN.left + 0.2, y: currentY + 0.1, w: BODY_W - 0.4, h: h - 0.2,
+        fontSize: 9, fontFace: 'Courier New', color: 'E2E8F0', valign: 'top',
+        lineSpacingMultiple: 1.3,
+      });
+      currentY += h + 0.15;
+      continue;
+    }
+
+    // ── Widget ──
+    if (node.classList?.contains('widget-wrap') || node.querySelector?.('.widget-wrap')) {
+      const slide = needSlide();
+      const wTitle = node.querySelector('.widget-toolbar-title')?.textContent || 'Dashboard Widget';
+      const h = 2.5;
+      slide.addShape(pptx.ShapeType.rect, {
+        x: MARGIN.left, y: currentY, w: BODY_W, h: h,
+        fill: { color: T.light }, line: { color: 'CBD5E1', width: 1, dashType: 'dash' },
+        rectRadius: 0.12,
+      });
+      slide.addText('\u{1F4CA}', {
+        x: MARGIN.left, y: currentY + 0.5, w: BODY_W, h: 0.6,
+        fontSize: 28, align: 'center',
+      });
+      slide.addText(wTitle, {
+        x: MARGIN.left + 0.5, y: currentY + 1.2, w: BODY_W - 1, h: 0.4,
+        fontSize: 14, fontFace: 'Arial', color: T.slate, bold: true, align: 'center',
+      });
+      slide.addText('Interactive dashboard widget', {
+        x: MARGIN.left + 0.5, y: currentY + 1.6, w: BODY_W - 1, h: 0.3,
+        fontSize: 10, fontFace: 'Arial', color: T.gray, align: 'center',
+      });
+      currentY += h + 0.2;
+      continue;
+    }
+  }
+
+  // Ensure at least one content slide exists
+  if (pptx.slides.length === 0) {
+    const slide = pptx.addSlide();
+    addHeaderBar(slide, '');
+    addBrandFooter(slide);
+    slide.addText('Empty document', {
+      x: 2, y: 3, w: 9, h: 1, fontSize: 18, color: T.gray, align: 'center',
+    });
+  }
+
+  report('Generating file\u2026');
+  const filename = (title || 'report').replace(/[^a-zA-Z0-9_\- ]/g, '').replace(/\s+/g, '-').toLowerCase();
+  await pptx.writeFile({ fileName: filename + '.pptx' });
+  report('');
+}

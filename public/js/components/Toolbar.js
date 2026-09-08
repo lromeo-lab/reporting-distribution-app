@@ -27,7 +27,7 @@ const I_PDF  = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none">
 const I_DOC  = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M4 1h5l4 4v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.3"/><path d="M6 8h4M6 10.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>`;
 const I_PPTX = html`<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="9" rx="1.5" stroke="currentColor" strokeWidth="1.3"/><line x1="5" y1="14" x2="11" y2="14" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><line x1="8" y1="12" x2="8" y2="14" stroke="currentColor" strokeWidth="1.3"/></svg>`;
 
-export function Toolbar({ editor, onOpenWidgetModal, onExportPDF }) {
+export function Toolbar({ editor, onOpenWidgetModal, onExportPDF, onExportPPTX }) {
   const [headingOpen, setHeadingOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const ddRef = useRef(null);
@@ -157,11 +157,12 @@ export function Toolbar({ editor, onOpenWidgetModal, onExportPDF }) {
                   <span className="tb-export-desc">Coming soon</span>
                 </div>
               </button>
-              <button type="button" className="tb-export-item disabled" disabled>
+              <button type="button" className="tb-export-item"
+                onClick=${() => { setExportOpen(false); onExportPPTX && onExportPPTX(); }}>
                 ${I_PPTX}
                 <div className="tb-export-info">
                   <span className="tb-export-label">PowerPoint</span>
-                  <span className="tb-export-desc">Coming soon</span>
+                  <span className="tb-export-desc">Widescreen slides (.pptx)</span>
                 </div>
               </button>
             </div>

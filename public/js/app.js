@@ -8,7 +8,7 @@ import { WidgetPicker } from './components/WidgetPicker.js';
 import { createSeedDocument } from './components/WidgetExtension.js';
 import { loadDocument, saveDocument, listDocuments, deleteDocument } from './utils/api.js';
 import { I18nProvider, useI18n } from './utils/i18n.js';
-import { exportToPDF } from './utils/export.js';
+import { exportToPDF, exportToPPTX } from './utils/export.js';
 
 const html = htm.bind(React.createElement);
 
@@ -279,7 +279,7 @@ function App() {
       <div className="content-column">
         <header className="unified-bar">
           <div className="bar-center">
-            <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} onExportPDF=${handleExportPDF} />
+            <${Toolbar} editor=${editor} onOpenWidgetModal=${() => setModalMode('picker')} onExportPDF=${handleExportPDF} onExportPPTX=${handleExportPPTX} />
           </div>
           <div className="bar-right">
             <select className="lang-select" value=${locale} onChange=${e => setLocale(e.target.value)}>
